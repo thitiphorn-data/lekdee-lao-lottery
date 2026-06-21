@@ -206,7 +206,8 @@ function render(){
   const C = (h)=>A.colorFor(h);
   const size = A.state.size||A.state.windowSize, side = A.state.side;
   const todayISO = new Date().toISOString().slice(0,10);
-  const l = A.LAO, c = C(l.hue), c2 = C(l.hue+28);
+  const HUE_BOTTOM = 178; // ล่าง = เขียวมินต์ (ให้ต่างจากม่วง "บน" ชัดเจน)
+  const l = A.LAO, c = C(l.hue), c2 = C(HUE_BOTTOM);
   const bg='linear-gradient(160deg,#ECEDFB 0%,#F1EBFB 50%,#FBEDF6 100%)';
   const brandBg=`linear-gradient(135deg, ${C(278).accent}, ${C(330).accent})`;
   /* gradient ไล่เฉดสำหรับการ์ดสีสด */
@@ -441,26 +442,28 @@ function render(){
   /* size comparison cards */
   detail.appendChild(el('div',{style:{fontSize:'13px',color:'#9b94ad',marginBottom:'9px'}},'เทียบขนาดชุด — ยิ่งซื้อกว้าง โอกาสยิ่งสูง แต่ต้นทุนมากขึ้น (กดเพื่อเลือก)'));
   const sizeCardGrid = el('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:'12px',marginBottom:'22px'}});
-  const sizeGrads={40:grad(258,288), 30:grad(312,338), 20:grad(28,58)}; // ม่วง / ชมพู / ส้มพีช
-  const sizeGlow={40:'rgba(120,90,220,.38)', 30:'rgba(220,90,180,.36)', 20:'rgba(240,150,70,.36)'};
+  // พาสเทล: ไล่เฉดอ่อน + ตัวอักษรสีเข้มของโทนนั้น
+  const pastelGrad=(h)=>`linear-gradient(135deg, oklch(0.93 0.055 ${h}) 0%, oklch(0.88 0.085 ${h+18}) 100%)`;
+  const sizeHue={40:282, 30:330, 20:48}; // ม่วง / ชมพู / พีช (พาสเทล)
   [40,30,20].forEach(w=>{
     const a=A.cov(pt,total,w), b=A.cov(pb,total,w); const active=w===size;
-    sizeCardGrid.appendChild(el('div',{style:{background:sizeGrads[w],borderRadius:'20px',padding:'15px 16px',cursor:'pointer',color:'#fff',position:'relative',overflow:'hidden',transition:'all .15s',
-      boxShadow:active?('0 14px 30px '+sizeGlow[w]):'0 6px 16px rgba(60,40,100,.12)',
-      outline:active?'3px solid #fff':'3px solid transparent', outlineOffset:'-3px', transform:active?'translateY(-2px)':'none'},
+    const h=sizeHue[w], ink=`oklch(0.45 0.16 ${h})`, sub=`oklch(0.55 0.10 ${h})`;
+    sizeCardGrid.appendChild(el('div',{style:{background:pastelGrad(h),borderRadius:'20px',padding:'15px 16px',cursor:'pointer',color:ink,position:'relative',overflow:'hidden',transition:'all .15s',
+      boxShadow:active?('0 12px 26px oklch(0.7 0.12 '+h+' / .45)'):'0 5px 14px rgba(60,40,100,.08)',
+      border:active?('2px solid oklch(0.66 0.14 '+h+')'):'2px solid transparent', transform:active?'translateY(-2px)':'none'},
       onClick:()=>A.setState({windowSize:w})},[
-      el('div',{style:{position:'absolute',right:'-20px',top:'-20px',width:'74px',height:'74px',borderRadius:'50%',background:'rgba(255,255,255,.14)'}}),
+      el('div',{style:{position:'absolute',right:'-20px',top:'-20px',width:'74px',height:'74px',borderRadius:'50%',background:'rgba(255,255,255,.35)'}}),
       el('div',{style:{position:'relative',display:'flex',justifyContent:'space-between',alignItems:'center'}},[
         el('span',{style:{fontWeight:'700',fontSize:'18px'}},w+' ตัว'),
-        el('span',{style:{fontSize:'11px',fontWeight:'600',padding:'3px 10px',borderRadius:'999px',background:'rgba(255,255,255,.25)',color:'#fff'}},w===40?'กว้างสุด':w===30?'สมดุล':'ประหยัด'),
+        el('span',{style:{fontSize:'11px',fontWeight:'600',padding:'3px 10px',borderRadius:'999px',background:'rgba(255,255,255,.6)',color:ink}},w===40?'กว้างสุด':w===30?'สมดุล':'ประหยัด'),
       ]),
       el('div',{style:{position:'relative',display:'flex',gap:'12px',marginTop:'12px'}},[
         el('div',{style:{flex:'1'}},[
-          el('div',{style:{fontSize:'11px',color:'rgba(255,255,255,.82)'}},'บน '+A.lab(a.best.s,w)),
+          el('div',{style:{fontSize:'11px',color:sub}},'บน '+A.lab(a.best.s,w)),
           el('div',{style:{fontWeight:'700',fontSize:'22px'}},A.pl(a.best.p)),
         ]),
         el('div',{style:{flex:'1'}},[
-          el('div',{style:{fontSize:'11px',color:'rgba(255,255,255,.82)'}},'ล่าง '+A.lab(b.best.s,w)),
+          el('div',{style:{fontSize:'11px',color:sub}},'ล่าง '+A.lab(b.best.s,w)),
           el('div',{style:{fontWeight:'700',fontSize:'22px'}},A.pl(b.best.p)),
         ]),
       ]),
@@ -473,7 +476,7 @@ function render(){
     const sideC=side==='top'?c:c2; const cnts=side==='top'?ct:cb; const sp=side==='top'?pt:pb;
     const cv=A.cov(sp,total,size);
     const maxF=Math.max(...cnts,1);
-    const heatHue=side==='top'?l.hue:l.hue+28;
+    const heatHue=side==='top'?l.hue:HUE_BOTTOM;
 
     const heatGrid = el('div',{style:{display:'grid',gridTemplateColumns:'repeat(10,1fr)',gap:'4px'}});
     cnts.forEach((f,nn)=>{

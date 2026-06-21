@@ -56,7 +56,8 @@ const App = {
   state: {
     windowSize:30,
     dateFrom:'2025-01-01', dateTo:new Date().toISOString().slice(0,10),
-    preset:'all', side:'top'
+    preset:'all', side:'top',
+    openCal:null, calMonth:0   // custom dd/mm/yyyy date picker
   },
   theme:'pastel',
 
@@ -121,12 +122,17 @@ const App = {
   },
 
   /* ---- live update: ยิงหลาย proxy พร้อมกัน เอาอันที่เร็วสุดที่สำเร็จ ---- */
-  SOURCE_URL:'https://www.sanook.com/news/archive/laolotto/',
+  sourceUrl(){ // หน้า "งวดวันนี้" ของ Sanook ฝัง JSON ผล ~10 งวดล่าสุดไว้
+    const d=new Date();
+    return 'https://www.sanook.com/news/laolotto/'+this.pad(d.getDate())+this.pad(d.getMonth()+1)+(d.getFullYear()+543)+'/';
+  },
   parse(html){
-    const re=/laolotto\/(\d{2})(\d{2})(\d{4})\/[\s\S]*?เลขท้าย 4 ตัว<\/span>(\d{4})/g;
-    const out=[]; let m;
+    // ดึงจาก Apollo JSON: "dateSlug":"DDMMYYYY" ... "last4Prize":"NNNN" (≈10 งวด/หน้า)
+    const re=/"dateSlug\\?":\\?"(\d{2})(\d{2})(\d{4})"[\s\S]{0,400}?"last4Prize\\?":\\?"(\d{4})"/g;
+    const out=[]; const seen={}; let m;
     while((m=re.exec(html))){
-      const dd=+m[1], mm=+m[2], be=+m[3], n4=+m[4];   // วันที่ใน URL = ddmmyyyy(พ.ศ.)
+      const key=m[1]+m[2]+m[3]; if(seen[key]) continue; seen[key]=1;
+      const dd=+m[1], mm=+m[2], be=+m[3], n4=+m[4];
       const ts=new Date(be-543, mm-1, dd).getTime();
       out.push({ ts, top:n4%100, bottom:Math.floor(n4/100) }); // 4240 → บน 40 (เลขท้าย 2 ตัว) / ล่าง 42 (คู่หน้า)
     }
@@ -159,7 +165,7 @@ const App = {
     this._ensure();
     this.updating=true; this.updateStatus=''; this.updateOk=null; render();
     try{
-      const html=await this.fetchProxied(this.SOURCE_URL);
+      const html=await this.fetchProxied(this.sourceUrl());
       const list=this.parse(html);
       if(list.length){
         this.mergeReal(list);
@@ -267,6 +273,48 @@ function render(){
   const sizeTabBtns=[40,30,20].map(w=>
     el('button',{style:segStyle(w===size,c),onClick:()=>A.setState({windowSize:w})},w+' ตัว'));
 
+  /* ---- custom date picker (แสดง dd/mm/yyyy) ---- */
+  const MIN_ISO='2025-01-01', MAX_ISO=todayISO;
+  const ddmmyyyy=(iso)=>{ const [y,m,d]=iso.split('-'); return d+'/'+m+'/'+y; };
+  const buildCalendar=(which, valueISO)=>{
+    const base=new Date(A.state.calMonth||Date.parse(valueISO));
+    const Y=base.getFullYear(), M=base.getMonth();
+    const startDow=new Date(Y,M,1).getDay(), daysIn=new Date(Y,M+1,0).getDate();
+    const navBtn=(txt,delta)=>el('button',{style:{border:'none',background:c.soft,color:c.deep,width:'28px',height:'28px',borderRadius:'8px',cursor:'pointer',fontSize:'14px',fontWeight:'600'},
+      onClick:(e)=>{ e.stopPropagation(); A.setState({calMonth:new Date(Y,M+delta,1).getTime()}); }},txt);
+    const header=el('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'8px'}},[
+      navBtn('‹',-1),
+      el('div',{style:{fontWeight:'600',fontSize:'13px'}},A.TM[M]+' '+(Y+543)),
+      navBtn('›',1),
+    ]);
+    const weekRow=el('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'2px',marginBottom:'2px'}},
+      ['อา','จ','อ','พ','พฤ','ศ','ส'].map(w=>el('div',{style:{textAlign:'center',fontSize:'10px',color:'#a9a2b8',padding:'3px 0'}},w)));
+    const grid=el('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'2px'}});
+    for(let i=0;i<startDow;i++) grid.appendChild(el('div'));
+    for(let dnum=1;dnum<=daysIn;dnum++){
+      const iso=Y+'-'+A.pad(M+1)+'-'+A.pad(dnum);
+      const disabled=iso<MIN_ISO||iso>MAX_ISO, selected=iso===valueISO;
+      grid.appendChild(el('div',{style:{textAlign:'center',padding:'6px 0',borderRadius:'8px',fontSize:'12px',
+        background:selected?c.deep:'transparent',color:disabled?'#d6d2df':selected?'#fff':'#2c2740',
+        cursor:disabled?'default':'pointer',fontWeight:selected?'600':'400'},
+        onClick:disabled?null:(e)=>{ e.stopPropagation(); A.setState(which==='from'?{dateFrom:iso,preset:'custom',openCal:null}:{dateTo:iso,preset:'custom',openCal:null}); }},dnum));
+    }
+    return el('div',{style:{position:'absolute',top:'100%',left:'0',marginTop:'6px',zIndex:'50',background:'#fff',borderRadius:'14px',boxShadow:'0 14px 34px rgba(60,40,100,.20)',border:'1px solid rgba(40,30,60,.08)',padding:'12px',width:'248px'}},[header,weekRow,grid]);
+  };
+  const dateField=(which, valueISO)=>{
+    const wrap=el('div',{style:{position:'relative'}});
+    wrap.appendChild(el('div',{style:{padding:'8px 12px',borderRadius:'12px',border:'1px solid '+(A.state.openCal===which?c.deep:'rgba(40,30,60,.14)'),fontSize:'13px',color:'#2c2740',background:'#fff',cursor:'pointer',userSelect:'none',display:'flex',alignItems:'center',gap:'10px',minWidth:'128px'},
+      onClick:(e)=>{ e.stopPropagation(); A.setState({openCal:A.state.openCal===which?null:which, calMonth:Date.parse(valueISO)}); }},[
+      el('span',{},ddmmyyyy(valueISO)),
+      el('span',{style:{marginLeft:'auto',opacity:'.55',fontSize:'14px'}},'📅'),
+    ]));
+    if(A.state.openCal===which){
+      wrap.appendChild(el('div',{style:{position:'fixed',inset:'0',zIndex:'40'},onClick:()=>A.setState({openCal:null})}));
+      wrap.appendChild(buildCalendar(which, valueISO));
+    }
+    return wrap;
+  };
+
   detail.appendChild(el('div',{style:{background:'#fff',borderRadius:'20px',padding:'16px 18px',boxShadow:'0 8px 24px rgba(60,40,100,.05)',border:'1px solid rgba(40,30,60,.05)',display:'flex',flexWrap:'wrap',gap:'22px',alignItems:'flex-end',marginBottom:'18px'}},[
     el('div',{},[
       el('label',{style:{fontSize:'12px',color:'#9b94ad',marginBottom:'7px',display:'block',fontWeight:'600'}},'ช่วงวันที่'),
@@ -275,15 +323,11 @@ function render(){
     el('div',{style:{display:'flex',gap:'8px',alignItems:'flex-end'}},[
       el('div',{},[
         el('label',{style:{fontSize:'12px',color:'#9b94ad',marginBottom:'7px',display:'block',fontWeight:'600'}},'ตั้งแต่'),
-        el('input',{type:'date',value:A.state.dateFrom,min:'2025-01-01',max:todayISO,
-          style:{padding:'8px 10px',borderRadius:'12px',border:'1px solid rgba(40,30,60,.14)',fontSize:'13px',color:'#2c2740',background:'#fff'},
-          onChange:(e)=>A.setState({dateFrom:e.target.value,preset:'custom'})}),
+        dateField('from', A.state.dateFrom),
       ]),
       el('div',{},[
         el('label',{style:{fontSize:'12px',color:'#9b94ad',marginBottom:'7px',display:'block',fontWeight:'600'}},'ถึง'),
-        el('input',{type:'date',value:A.state.dateTo,min:'2025-01-01',max:todayISO,
-          style:{padding:'8px 10px',borderRadius:'12px',border:'1px solid rgba(40,30,60,.14)',fontSize:'13px',color:'#2c2740',background:'#fff'},
-          onChange:(e)=>A.setState({dateTo:e.target.value,preset:'custom'})}),
+        dateField('to', A.state.dateTo),
       ]),
     ]),
     el('div',{},[

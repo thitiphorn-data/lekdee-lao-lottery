@@ -254,7 +254,7 @@ function render(){
     background:real?'#e7f6ee':'#f1eff5',color:real?'#1f7a4d':'#a39db4'}}, real?('● ข้อมูลจริง '+A.draws().length+' งวด'):'● ข้อมูลตัวอย่าง');
 
   /* ====================== ส่วนวิเคราะห์ ====================== */
-  const fa=Date.parse(A.state.dateFrom), fb=Date.parse(A.state.dateTo)+86400000;
+  const fa=new Date(A.state.dateFrom+'T00:00:00').getTime(), fb=new Date(A.state.dateTo+'T00:00:00').getTime()+86400000; // เวลาท้องถิ่น (ไม่งั้นงวดแรกหลุด 1 งวด)
   const allDr=A.draws();
   const dr=allDr.filter(x=>x.ts>=fa&&x.ts<fb);
   const total=dr.length;

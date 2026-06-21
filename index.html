@@ -65,7 +65,7 @@ const App = {
   theme:'pastel',
 
   /* หวยลาวอย่างเดียว */
-  LAO: { id:'lao', name:'หวยลาว', hue:172, seed:1011, tc:46, ts:13, bc:54, bs:12 },
+  LAO: { id:'lao', name:'หวยลาว', hue:340, seed:1011, tc:46, ts:13, bc:54, bs:12 }, // hue 340 = ชมพูเบอร์รี่ (หวาน)
   TM: ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'],
 
   /* live-update state */
@@ -122,7 +122,7 @@ const App = {
   pl(p){ return Math.round(p*100)+'%'; },
   conf(p){ return p>=0.6?'มั่นใจสูงมาก':p>=0.5?'มั่นใจสูง':p>=0.42?'ปานกลาง':'พอใช้'; },
   colorFor(hue){
-    const t=[0.72,0.12,0.54,0.16,0.965,0.03]; // pastel
+    const t=[0.68,0.155,0.50,0.205,0.955,0.045]; // sweet/candy — เข้มและอิ่มสีกว่าเดิม
     return { accent:`oklch(${t[0]} ${t[1]} ${hue})`, deep:`oklch(${t[2]} ${t[3]} ${hue})`, soft:`oklch(${t[4]} ${t[5]} ${hue})`, hue };
   },
   dataRange(){ const a=this.draws(); return a.length ? {min:new Date(a[0].ts), max:new Date(a[a.length-1].ts)} : {min:new Date(2025,0,1), max:new Date()}; },
@@ -184,7 +184,7 @@ const App = {
         this.mergeReal(list);
         this.lastUpdated=Date.now(); this.saveReal();
         this.updateOk=true;
-        this.updateStatus='ดึงสำเร็จ • พบ '+list.length+' งวด (สะสมรวม '+this._real.length+' งวด)';
+        this.updateStatus='ดึงสำเร็จ • ผลล่าสุด '+list.length+' งวด (ข้อมูลทั้งหมด '+this.draws().length+' งวด)';
       }else{
         this.updateOk=false;
         this.updateStatus='เชื่อมต่อได้ แต่ยังอ่านผลไม่ได้ (เว็บต้นทางอาจเปลี่ยนรูปแบบ) — ลองใหม่อีกครั้ง';
@@ -207,8 +207,8 @@ function render(){
   const size = A.state.size||A.state.windowSize, side = A.state.side;
   const todayISO = new Date().toISOString().slice(0,10);
   const l = A.LAO, c = C(l.hue), c2 = C(l.hue+28);
-  const bg='linear-gradient(180deg,#FAF7FF 0%,#F4FBFA 100%)';
-  const brandBg=`linear-gradient(135deg, ${C(288).deep}, ${C(330).deep})`;
+  const bg='linear-gradient(160deg,#FFF0F6 0%,#FBEFFB 45%,#F2F0FF 100%)';
+  const brandBg=`linear-gradient(135deg, ${C(300).deep}, ${C(345).deep})`;
 
   const root = document.getElementById('root');
   root.innerHTML='';
@@ -295,14 +295,23 @@ function render(){
     }
     return el('div',{style:{position:'absolute',top:'100%',left:'0',marginTop:'6px',zIndex:'50',background:'#fff',borderRadius:'14px',boxShadow:'0 14px 34px rgba(60,40,100,.20)',border:'1px solid rgba(40,30,60,.08)',padding:'12px',width:'248px'}},[header,weekRow,grid]);
   };
+  const parseDMY=(s)=>{ const m=(s||'').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if(!m) return null;
+    const d=+m[1], mo=+m[2], y=+m[3], iso=y+'-'+A.pad(mo)+'-'+A.pad(d), dt=new Date(y,mo-1,d);
+    if(dt.getFullYear()!==y||dt.getMonth()!==mo-1||dt.getDate()!==d) return null;   // วันที่ไม่มีจริง
+    if(iso<MIN_ISO||iso>MAX_ISO) return null; return iso; };
   const dateField=(which, valueISO)=>{
+    const open=A.state.openCal===which;
     const wrap=el('div',{style:{position:'relative'}});
-    wrap.appendChild(el('div',{style:{padding:'8px 12px',borderRadius:'12px',border:'1px solid '+(A.state.openCal===which?c.deep:'rgba(40,30,60,.14)'),fontSize:'13px',color:'#2c2740',background:'#fff',cursor:'pointer',userSelect:'none',display:'flex',alignItems:'center',gap:'10px',minWidth:'128px'},
-      onClick:(e)=>{ e.stopPropagation(); A.setState({openCal:A.state.openCal===which?null:which, calMonth:Date.parse(valueISO)}); }},[
-      el('span',{},ddmmyyyy(valueISO)),
-      el('span',{style:{marginLeft:'auto',opacity:'.55',fontSize:'14px'}},'📅'),
-    ]));
-    if(A.state.openCal===which){
+    const box=el('div',{style:{display:'flex',alignItems:'center',gap:'2px',padding:'3px 4px 3px 10px',borderRadius:'12px',border:'1px solid '+(open?c.deep:'rgba(40,30,60,.14)'),background:'#fff'}});
+    const input=el('input',{type:'text', value:ddmmyyyy(valueISO), inputmode:'numeric', placeholder:'วว/ดด/ปปปป', maxlength:'10',
+      style:{border:'none',outline:'none',background:'transparent',fontSize:'13px',color:'#2c2740',width:'94px',fontFamily:"'Sarabun',sans-serif"},
+      onChange:(e)=>{ const iso=parseDMY(e.target.value);
+        if(iso) A.setState(which==='from'?{dateFrom:iso,preset:'custom',openCal:null}:{dateTo:iso,preset:'custom',openCal:null});
+        else e.target.value=ddmmyyyy(valueISO); }});  // พิมพ์ผิด → คืนค่าเดิม
+    const calBtn=el('button',{type:'button',style:{border:'none',background:open?c.soft:'transparent',cursor:'pointer',fontSize:'15px',padding:'5px 7px',borderRadius:'8px',lineHeight:'1'},
+      onClick:(e)=>{ e.stopPropagation(); A.setState({openCal:open?null:which, calMonth:Date.parse(valueISO)}); }},'📅');
+    box.appendChild(input); box.appendChild(calBtn); wrap.appendChild(box);
+    if(open){
       wrap.appendChild(el('div',{style:{position:'fixed',inset:'0',zIndex:'40'},onClick:()=>A.setState({openCal:null})}));
       wrap.appendChild(buildCalendar(which, valueISO));
     }

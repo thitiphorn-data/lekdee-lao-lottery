@@ -23,6 +23,8 @@
 </head>
 <body>
 <div id="root"></div>
+<!-- ประวัติผลหวยลาวจริง 1 ม.ค. 2568 → ปัจจุบัน (สร้างจาก tools/fetch_history.py) -->
+<script src="lao_history.js"></script>
 <script>
 "use strict";
 
@@ -66,7 +68,7 @@ const App = {
   TM: ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'],
 
   /* live-update state */
-  _mock:null, _real:null, lastUpdated:0, updating:false, updateStatus:'', updateOk:null,
+  _mock:null, _real:null, _seed:null, lastUpdated:0, updating:false, updateStatus:'', updateOk:null,
 
   setState(patch){ Object.assign(this.state, patch); render(); },
 
@@ -82,6 +84,7 @@ const App = {
     }
     this._mock=draws;
     if(!this._real) this.loadReal();
+    this.loadSeed();
   },
 
   /* ---- real data layer (localStorage) ---- */
@@ -97,8 +100,15 @@ const App = {
     for(const d of list) byDay[this.ymd(d.ts)]={ts:d.ts,top:d.top,bottom:d.bottom};
     this._real=Object.values(byDay).sort((a,b)=>a.ts-b.ts);
   },
-  isReal(){ return !!(this._real && this._real.length); },
-  draws(){ return this.isReal() ? this._real : this._mock; },
+  loadSeed(){ if(this._seed===null) this._seed = Array.isArray(window.LAO_HISTORY) ? window.LAO_HISTORY.slice() : []; },
+  isReal(){ return (this._seed&&this._seed.length)||(this._real&&this._real.length); },
+  draws(){
+    if(!this.isReal()) return this._mock;
+    const byDay={};
+    for(const d of (this._seed||[])) byDay[this.ymd(d.ts)]=d;
+    for(const d of (this._real||[])) byDay[this.ymd(d.ts)]=d; // ผลที่กดอัปเดตใหม่ทับของในตัว
+    return Object.values(byDay).sort((a,b)=>a.ts-b.ts);
+  },
 
   /* ---- stats helpers ---- */
   pad(n){ return String(n).padStart(2,'0'); },
@@ -114,11 +124,13 @@ const App = {
     const t=[0.72,0.12,0.54,0.16,0.965,0.03]; // pastel
     return { accent:`oklch(${t[0]} ${t[1]} ${hue})`, deep:`oklch(${t[2]} ${t[3]} ${hue})`, soft:`oklch(${t[4]} ${t[5]} ${hue})`, hue };
   },
+  dataRange(){ const a=this.draws(); return a.length ? {min:new Date(a[0].ts), max:new Date(a[a.length-1].ts)} : {min:new Date(2025,0,1), max:new Date()}; },
   applyPreset(k){
-    const end=new Date(); let start;
-    if(k==='all') start=new Date(2025,0,1);
-    else { const days=k==='6m'?180:k==='3m'?90:30; start=new Date(Date.now()-days*86400000); }
-    this.setState({ preset:k, dateFrom:start.toISOString().slice(0,10), dateTo:end.toISOString().slice(0,10) });
+    const {min,max}=this.dataRange(); let start;
+    if(k==='all') start=min;
+    else { const days=k==='6m'?180:k==='3m'?90:30; start=new Date(max.getTime()-days*86400000); if(start<min) start=min; }
+    const iso=d=>{ const z=new Date(d.getTime()-d.getTimezoneOffset()*60000); return z.toISOString().slice(0,10); };
+    this.setState({ preset:k, dateFrom:iso(start), dateTo:iso(max) });
   },
 
   /* ---- live update: ยิงหลาย proxy พร้อมกัน เอาอันที่เร็วสุดที่สำเร็จ ---- */
@@ -222,7 +234,8 @@ function render(){
   let statusText, statusColor='#9b94ad';
   if(A.updating){ statusText='กำลังเชื่อมต่อเว็บผลหวย… (ปกติ 2–8 วินาที)'; }
   else if(A.updateStatus){ statusText=A.updateStatus; statusColor=A.updateOk?'#1f7a4d':'#c0563f'; }
-  else if(A.lastUpdated){ const u=new Date(A.lastUpdated); statusText='อัปเดตล่าสุด '+A.thai(A.lastUpdated)+' '+A.pad(u.getHours())+':'+A.pad(u.getMinutes())+' น.'; }
+  else if(A.lastUpdated){ const u=new Date(A.lastUpdated); statusText='อัปเดตล่าสุด '+A.thai(A.lastUpdated)+' '+A.pad(u.getHours())+':'+A.pad(u.getMinutes())+' น. • กด “อัปเดตผลจริง” เพื่อดึงงวดใหม่'; statusColor='#1f7a4d'; }
+  else if(A.isReal()){ const a=A.draws(); statusText='มีข้อมูลจริงในตัว '+a.length+' งวด (ถึง '+A.thai(a[a.length-1].ts)+') • กด “อัปเดตผลจริง” เพื่อดึงงวดใหม่'; statusColor='#1f7a4d'; }
   else statusText='ยังไม่ได้ดึงข้อมูลจริง — กำลังแสดงข้อมูลตัวอย่าง (กด “อัปเดตผลจริง” เพื่อดึงผลหวยลาวจริง)';
   wrap.appendChild(el('div',{style:{fontSize:'12px',color:statusColor,margin:'0 0 16px',lineHeight:'1.5'}},statusText));
 
@@ -486,7 +499,8 @@ function render(){
   wrap.appendChild(detail);
 }
 
-render();
+App._ensure();
+App.applyPreset('all');  // ตั้งช่วงวันที่เริ่มต้นให้ตรงกับข้อมูลจริง แล้ว render
 </script>
 </body>
 </html>

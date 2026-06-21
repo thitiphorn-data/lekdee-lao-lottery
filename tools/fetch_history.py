@@ -57,8 +57,10 @@ rows = [results[d] for d in sorted(results)]
 print(f"เสร็จ: พบผลจริง {len(rows)} งวด, error {errors}")
 
 # ---- lao_history.json (สำหรับเว็บแอป) ----
-data = [{'ts': int(datetime.datetime(r['date'].year, r['date'].month, r['date'].day).timestamp() * 1000),
-         'top': r['top'], 'bottom': r['bottom']} for r in rows]
+# ts = เที่ยงคืน UTC ของวันงวด (กำหนดเป็น UTC ตายตัว เพื่อให้รันที่เครื่องไหน/CI ได้ค่าตรงกันเสมอ)
+def ts_of(d):
+    return int(datetime.datetime(d.year, d.month, d.day, tzinfo=datetime.timezone.utc).timestamp() * 1000)
+data = [{'ts': ts_of(r['date']), 'top': r['top'], 'bottom': r['bottom']} for r in rows]
 with open(os.path.join(OUT_DIR, 'lao_history.json'), 'w', encoding='utf-8') as f:
     json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
 print("เขียน lao_history.json แล้ว")

@@ -68,6 +68,15 @@ with open(os.path.join(OUT_DIR, 'lao_history.js'), 'w', encoding='utf-8') as f:
     f.write('window.LAO_HISTORY=' + json.dumps(data, ensure_ascii=False, separators=(',', ':')) + ';')
 print("เขียน lao_history.js แล้ว")
 
+# ---- lao_history.csv (ให้ Google Sheet ดึงด้วย IMPORTDATA, UTF-8 ไม่มี BOM) ----
+TM_CSV = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']
+with open(os.path.join(OUT_DIR, 'lao_history.csv'), 'w', encoding='utf-8', newline='') as f:
+    f.write('วันที่,เลขท้าย 4 ตัว,2 ตัวบน,2 ตัวล่าง\n')
+    for r in rows:
+        dd = r['date']
+        f.write(f"{dd.day} {TM_CSV[dd.month-1]} {dd.year+543},{r['last4']},{r['top']:02d},{r['bottom']:02d}\n")
+print("เขียน lao_history.csv แล้ว")
+
 # ---- lao_history.xlsx (สำหรับคนอ่าน) ----
 try:
     import openpyxl

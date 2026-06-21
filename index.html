@@ -59,7 +59,8 @@ const App = {
     windowSize:30,
     dateFrom:'2025-01-01', dateTo:new Date().toISOString().slice(0,10),
     preset:'all', side:'top',
-    openCal:null, calMonth:0   // custom dd/mm/yyyy date picker
+    openCal:null, calMonth:0,  // custom dd/mm/yyyy date picker
+    view:'analyze'             // 'analyze' | 'table'
   },
   theme:'pastel',
 
@@ -237,7 +238,15 @@ function render(){
   else if(A.lastUpdated){ const u=new Date(A.lastUpdated); statusText='อัปเดตล่าสุด '+A.thai(A.lastUpdated)+' '+A.pad(u.getHours())+':'+A.pad(u.getMinutes())+' น. • กด “อัปเดตผลจริง” เพื่อดึงงวดใหม่'; statusColor='#1f7a4d'; }
   else if(A.isReal()){ const a=A.draws(); statusText='มีข้อมูลจริงในตัว '+a.length+' งวด (ถึง '+A.thai(a[a.length-1].ts)+') • กด “อัปเดตผลจริง” เพื่อดึงงวดใหม่'; statusColor='#1f7a4d'; }
   else statusText='ยังไม่ได้ดึงข้อมูลจริง — กำลังแสดงข้อมูลตัวอย่าง (กด “อัปเดตผลจริง” เพื่อดึงผลหวยลาวจริง)';
-  wrap.appendChild(el('div',{style:{fontSize:'12px',color:statusColor,margin:'0 0 16px',lineHeight:'1.5'}},statusText));
+  wrap.appendChild(el('div',{style:{fontSize:'12px',color:statusColor,margin:'0 0 14px',lineHeight:'1.5'}},statusText));
+
+  /* ---------- tabs (สลับหน้า) ---------- */
+  const tabBtn=(v,label)=>el('button',{style:{padding:'9px 16px',borderRadius:'999px',fontWeight:'600',fontSize:'14px',cursor:'pointer',whiteSpace:'nowrap',
+    border:'1px solid '+(A.state.view===v?c.deep:'rgba(40,30,60,.10)'),background:A.state.view===v?c.deep:'#fff',color:A.state.view===v?'#fff':'#6c6680',transition:'all .15s'},
+    onClick:()=>A.setState({view:v, openCal:null})},label);
+  wrap.appendChild(el('div',{style:{display:'flex',gap:'8px',marginBottom:'16px',flexWrap:'wrap'}},[
+    tabBtn('analyze','วิเคราะห์ช่วงเลข'), tabBtn('table','สถิติเลข 00–99'),
+  ]));
 
   /* ---------- data badge ---------- */
   const real=A.isReal();
@@ -256,37 +265,11 @@ function render(){
   const segStyle=(a,cc)=>({padding:'7px 13px',borderRadius:'999px',fontSize:'13px',fontWeight:'600',cursor:'pointer',border:'1px solid '+(a?cc.deep:'rgba(40,30,60,.1)'),background:a?cc.deep:'#fff',color:a?'#fff':'#6c6680',transition:'all .15s'});
   const chip=(cc)=>({fontWeight:'500',fontSize:'13px',width:'34px',padding:'4px 0',textAlign:'center',borderRadius:'9px',background:cc.soft,color:cc.deep});
 
-  const detail = el('div',{style:{animation:'pop .35s ease both'}});
-
-  /* header */
-  detail.appendChild(el('div',{style:{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:'16px',flexWrap:'wrap',margin:'2px 0 18px'}},[
-    el('div',{},[
-      el('div',{style:{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}},[
-        el('span',{style:{fontWeight:'600',fontSize:'14px',padding:'6px 15px',borderRadius:'999px',background:c.soft,color:c.deep,display:'inline-block'}},l.name),
-        badge,
-      ]),
-      el('h1',{style:{fontWeight:'600',fontSize:'27px',margin:'11px 0 0'}},'วิเคราะห์ช่วงเลข'),
-      el('div',{style:{fontSize:'13px',color:'#9b94ad',marginTop:'4px'}},'ช่วงข้อมูล '+A.thai(fa)+' – '+A.thai(Date.parse(A.state.dateTo))+' • '+total.toLocaleString()+' งวด'+(real?' • ข้อมูลจริงจาก Sanook':'')),
-    ]),
-    last?el('div',{style:{display:'flex',gap:'8px'}},[
-      el('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',padding:'8px 16px',borderRadius:'16px',background:c.soft,color:c.deep}},[
-        el('span',{style:{fontSize:'10px',opacity:'.75'}},'ล่าสุด บน'),
-        el('span',{style:{fontWeight:'600',fontSize:'22px'}},A.pad(last.top)),
-      ]),
-      el('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',padding:'8px 16px',borderRadius:'16px',background:c2.soft,color:c2.deep}},[
-        el('span',{style:{fontSize:'10px',opacity:'.75'}},'ล่าสุด ล่าง'),
-        el('span',{style:{fontWeight:'600',fontSize:'22px'}},A.pad(last.bottom)),
-      ]),
-    ]):null,
-  ]));
-
-  /* filter bar */
+  /* ---- shared: filter helpers + date picker (ใช้ทั้ง 2 หน้า) ---- */
   const presetBtns=[['all','ทั้งหมด'],['6m','6 เดือน'],['3m','3 เดือน'],['1m','30 วัน']].map(([k,label])=>
     el('button',{style:segStyle(A.state.preset===k,c),onClick:()=>A.applyPreset(k)},label));
   const sizeTabBtns=[40,30,20].map(w=>
     el('button',{style:segStyle(w===size,c),onClick:()=>A.setState({windowSize:w})},w+' ตัว'));
-
-  /* ---- custom date picker (แสดง dd/mm/yyyy) ---- */
   const MIN_ISO='2025-01-01', MAX_ISO=todayISO;
   const ddmmyyyy=(iso)=>{ const [y,m,d]=iso.split('-'); return d+'/'+m+'/'+y; };
   const buildCalendar=(which, valueISO)=>{
@@ -296,9 +279,7 @@ function render(){
     const navBtn=(txt,delta)=>el('button',{style:{border:'none',background:c.soft,color:c.deep,width:'28px',height:'28px',borderRadius:'8px',cursor:'pointer',fontSize:'14px',fontWeight:'600'},
       onClick:(e)=>{ e.stopPropagation(); A.setState({calMonth:new Date(Y,M+delta,1).getTime()}); }},txt);
     const header=el('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'8px'}},[
-      navBtn('‹',-1),
-      el('div',{style:{fontWeight:'600',fontSize:'13px'}},A.TM[M]+' '+(Y+543)),
-      navBtn('›',1),
+      navBtn('‹',-1), el('div',{style:{fontWeight:'600',fontSize:'13px'}},A.TM[M]+' '+(Y+543)), navBtn('›',1),
     ]);
     const weekRow=el('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'2px',marginBottom:'2px'}},
       ['อา','จ','อ','พ','พฤ','ศ','ส'].map(w=>el('div',{style:{textAlign:'center',fontSize:'10px',color:'#a9a2b8',padding:'3px 0'}},w)));
@@ -327,27 +308,99 @@ function render(){
     }
     return wrap;
   };
-
-  detail.appendChild(el('div',{style:{background:'#fff',borderRadius:'20px',padding:'16px 18px',boxShadow:'0 8px 24px rgba(60,40,100,.05)',border:'1px solid rgba(40,30,60,.05)',display:'flex',flexWrap:'wrap',gap:'22px',alignItems:'flex-end',marginBottom:'18px'}},[
+  const filterBar=(includeSize)=>el('div',{style:{background:'#fff',borderRadius:'20px',padding:'16px 18px',boxShadow:'0 8px 24px rgba(60,40,100,.05)',border:'1px solid rgba(40,30,60,.05)',display:'flex',flexWrap:'wrap',gap:'22px',alignItems:'flex-end',marginBottom:'18px'}},[
     el('div',{},[
       el('label',{style:{fontSize:'12px',color:'#9b94ad',marginBottom:'7px',display:'block',fontWeight:'600'}},'ช่วงวันที่'),
       el('div',{style:{display:'flex',gap:'6px',flexWrap:'wrap'}},presetBtns),
     ]),
     el('div',{style:{display:'flex',gap:'8px',alignItems:'flex-end'}},[
-      el('div',{},[
-        el('label',{style:{fontSize:'12px',color:'#9b94ad',marginBottom:'7px',display:'block',fontWeight:'600'}},'ตั้งแต่'),
-        dateField('from', A.state.dateFrom),
-      ]),
-      el('div',{},[
-        el('label',{style:{fontSize:'12px',color:'#9b94ad',marginBottom:'7px',display:'block',fontWeight:'600'}},'ถึง'),
-        dateField('to', A.state.dateTo),
-      ]),
+      el('div',{},[ el('label',{style:{fontSize:'12px',color:'#9b94ad',marginBottom:'7px',display:'block',fontWeight:'600'}},'ตั้งแต่'), dateField('from', A.state.dateFrom) ]),
+      el('div',{},[ el('label',{style:{fontSize:'12px',color:'#9b94ad',marginBottom:'7px',display:'block',fontWeight:'600'}},'ถึง'), dateField('to', A.state.dateTo) ]),
     ]),
-    el('div',{},[
+    includeSize ? el('div',{},[
       el('label',{style:{fontSize:'12px',color:'#9b94ad',marginBottom:'7px',display:'block',fontWeight:'600'}},'ขนาดชุดเลข (ตัวติดกัน)'),
       el('div',{style:{display:'flex',gap:'6px'}},sizeTabBtns),
+    ]) : null,
+  ]);
+
+  /* ====================== หน้าสถิติเลข 00–99 ====================== */
+  if(A.state.view==='table'){
+    const tbl = el('div',{style:{animation:'pop .35s ease both'}});
+    tbl.appendChild(el('div',{style:{margin:'2px 0 18px'}},[
+      el('div',{style:{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}},[
+        el('span',{style:{fontWeight:'600',fontSize:'14px',padding:'6px 15px',borderRadius:'999px',background:c.soft,color:c.deep}},l.name), badge,
+      ]),
+      el('h1',{style:{fontWeight:'600',fontSize:'27px',margin:'11px 0 0'}},'สถิติเลข 00–99'),
+      el('div',{style:{fontSize:'13px',color:'#9b94ad',marginTop:'4px'}},'แต่ละเลขออกเป็น 2 ตัวบน / 2 ตัวล่าง ไปแล้วกี่ครั้ง คิดเป็นกี่ % จาก '+total.toLocaleString()+' งวด ('+A.thai(fa)+' – '+A.thai(Date.parse(A.state.dateTo))+')'),
+    ]));
+    tbl.appendChild(filterBar(false));
+
+    /* sort control */
+    const sort=A.state.tableSort||'num';
+    const sortBtn=(k,label)=>el('button',{style:segStyle(sort===k,c),onClick:()=>A.setState({tableSort:k})},label);
+    tbl.appendChild(el('div',{style:{display:'flex',gap:'6px',flexWrap:'wrap',alignItems:'center',marginBottom:'12px'}},[
+      el('span',{style:{fontSize:'12px',color:'#9b94ad',fontWeight:'600',marginRight:'2px'}},'เรียงตาม'),
+      sortBtn('num','เลข 00–99'), sortBtn('top','บนออกบ่อย'), sortBtn('bottom','ล่างออกบ่อย'),
+    ]));
+
+    const maxTop=Math.max(1,...ct), maxBot=Math.max(1,...cb);
+    let order=[...Array(100).keys()];
+    if(sort==='top') order.sort((a,b)=> (ct[b]-ct[a]) || (a-b));
+    else if(sort==='bottom') order.sort((a,b)=> (cb[b]-cb[a]) || (a-b));
+    const pct=(x)=> total? (x/total*100) : 0;
+    const metric=(count, mx, cc)=>{ const p=pct(count); return el('div',{style:{position:'relative',background:'#f4f2f8',borderRadius:'8px',height:'26px',overflow:'hidden'}},[
+      el('div',{style:{position:'absolute',left:'0',top:'0',bottom:'0',width:(count/mx*100)+'%',background:cc.soft}}),
+      el('div',{style:{position:'relative',display:'flex',justifyContent:'space-between',alignItems:'center',height:'100%',padding:'0 9px',fontSize:'12px'}},[
+        el('span',{style:{fontWeight:'600',color:cc.deep}},p.toFixed(1)+'%'),
+        el('span',{style:{color:'#9b94ad',fontSize:'11px'}},count+' ครั้ง'),
+      ]),
+    ]); };
+    const headCell=(t,al)=>el('div',{style:{fontSize:'11px',color:'#9b94ad',fontWeight:'600',padding:'0 4px',textAlign:al||'left'}},t);
+    const rows=el('div',{style:{display:'flex',flexDirection:'column',gap:'6px'}});
+    rows.appendChild(el('div',{style:{display:'grid',gridTemplateColumns:'52px 1fr 1fr',gap:'10px',alignItems:'center',padding:'0 2px'}},[
+      headCell('เลข'), headCell('2 ตัวบน'), headCell('2 ตัวล่าง'),
+    ]));
+    order.forEach(n=>{
+      rows.appendChild(el('div',{style:{display:'grid',gridTemplateColumns:'52px 1fr 1fr',gap:'10px',alignItems:'center'}},[
+        el('div',{style:{fontWeight:'600',fontSize:'15px',textAlign:'center',color:'#2c2740'}},A.pad(n)),
+        metric(ct[n], maxTop, c), metric(cb[n], maxBot, c2),
+      ]));
+    });
+    tbl.appendChild(el('div',{style:{background:'#fff',borderRadius:'24px',padding:'18px',boxShadow:'0 12px 32px rgba(60,40,100,.06)',border:'1px solid rgba(40,30,60,.05)'}},[rows]));
+
+    tbl.appendChild(el('div',{style:{display:'flex',gap:'10px',alignItems:'flex-start',background:'rgba(255,255,255,.55)',border:'1px dashed rgba(40,30,60,.14)',borderRadius:'16px',padding:'14px 16px',fontSize:'12px',color:'#8a8499',lineHeight:'1.6',marginTop:'18px'}},[
+      el('span',{},'⚠️'),
+      el('span',{},'% คือสัดส่วนที่เลขนั้นออกในตำแหน่งบน/ล่าง จากจำนวนงวดทั้งหมดในช่วงที่เลือก (ผลรวมทุกเลขในแต่ละฝั่ง = 100%) • สถิติในอดีตไม่รับประกันผลในอนาคต'),
+    ]));
+    wrap.appendChild(tbl);
+    return;
+  }
+
+  const detail = el('div',{style:{animation:'pop .35s ease both'}});
+
+  /* header */
+  detail.appendChild(el('div',{style:{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:'16px',flexWrap:'wrap',margin:'2px 0 18px'}},[
+    el('div',{},[
+      el('div',{style:{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}},[
+        el('span',{style:{fontWeight:'600',fontSize:'14px',padding:'6px 15px',borderRadius:'999px',background:c.soft,color:c.deep,display:'inline-block'}},l.name),
+        badge,
+      ]),
+      el('h1',{style:{fontWeight:'600',fontSize:'27px',margin:'11px 0 0'}},'วิเคราะห์ช่วงเลข'),
+      el('div',{style:{fontSize:'13px',color:'#9b94ad',marginTop:'4px'}},'ช่วงข้อมูล '+A.thai(fa)+' – '+A.thai(Date.parse(A.state.dateTo))+' • '+total.toLocaleString()+' งวด'+(real?' • ข้อมูลจริงจาก Sanook':'')),
     ]),
+    last?el('div',{style:{display:'flex',gap:'8px'}},[
+      el('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',padding:'8px 16px',borderRadius:'16px',background:c.soft,color:c.deep}},[
+        el('span',{style:{fontSize:'10px',opacity:'.75'}},'ล่าสุด บน'),
+        el('span',{style:{fontWeight:'600',fontSize:'22px'}},A.pad(last.top)),
+      ]),
+      el('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',padding:'8px 16px',borderRadius:'16px',background:c2.soft,color:c2.deep}},[
+        el('span',{style:{fontSize:'10px',opacity:'.75'}},'ล่าสุด ล่าง'),
+        el('span',{style:{fontWeight:'600',fontSize:'22px'}},A.pad(last.bottom)),
+      ]),
+    ]):null,
   ]));
+
+  detail.appendChild(filterBar(true));
 
   /* recommendation panels */
   const mainPanel=(p,cc,label)=>{

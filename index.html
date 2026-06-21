@@ -206,8 +206,8 @@ function render(){
   const C = (h)=>A.colorFor(h);
   const size = A.state.size||A.state.windowSize, side = A.state.side;
   const todayISO = new Date().toISOString().slice(0,10);
-  const HUE_BOTTOM = 178; // ล่าง = เขียวมินต์ (ให้ต่างจากม่วง "บน" ชัดเจน)
-  const l = A.LAO, c = C(l.hue), c2 = C(HUE_BOTTOM);
+  const TOP_HUE = 345, BOT_HUE = 82;  // บน = ชมพู, ล่าง = เหลืองทอง (เลิกใช้เขียวมิ้น)
+  const l = A.LAO, c = C(l.hue), cT = C(TOP_HUE), c2 = C(BOT_HUE); // c = ม่วง (สีหลัก), cT = บน, c2 = ล่าง
   const bg='linear-gradient(160deg,#ECEDFB 0%,#F1EBFB 50%,#FBEDF6 100%)';
   const brandBg=`linear-gradient(135deg, ${C(278).accent}, ${C(330).accent})`;
   /* gradient ไล่เฉดสำหรับการ์ดสีสด */
@@ -379,7 +379,7 @@ function render(){
     order.forEach(n=>{
       rows.appendChild(el('div',{style:{display:'grid',gridTemplateColumns:'52px 1fr 1fr',gap:'10px',alignItems:'center'}},[
         el('div',{style:{fontWeight:'600',fontSize:'15px',textAlign:'center',color:'#2c2740'}},A.pad(n)),
-        metric(ct[n], maxTop, c), metric(cb[n], maxBot, c2),
+        metric(ct[n], maxTop, cT), metric(cb[n], maxBot, c2),
       ]));
     });
     tbl.appendChild(el('div',{style:{background:'#fff',borderRadius:'24px',padding:'18px',boxShadow:'0 12px 32px rgba(60,40,100,.06)',border:'1px solid rgba(40,30,60,.05)'}},[rows]));
@@ -436,7 +436,7 @@ function render(){
     ]);
   };
   detail.appendChild(el('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))',gap:'16px',marginBottom:'20px'}},[
-    mainPanel(pt,c,'2 ตัวบน'), mainPanel(pb,c2,'2 ตัวล่าง'),
+    mainPanel(pt,cT,'2 ตัวบน'), mainPanel(pb,c2,'2 ตัวล่าง'),
   ]));
 
   /* size comparison cards */
@@ -444,7 +444,7 @@ function render(){
   const sizeCardGrid = el('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:'12px',marginBottom:'22px'}});
   // พาสเทล: ไล่เฉดอ่อน + ตัวอักษรสีเข้มของโทนนั้น
   const pastelGrad=(h)=>`linear-gradient(135deg, oklch(0.93 0.055 ${h}) 0%, oklch(0.88 0.085 ${h+18}) 100%)`;
-  const sizeHue={40:282, 30:330, 20:48}; // ม่วง / ชมพู / พีช (พาสเทล)
+  const sizeHue={40:250, 30:338, 20:148}; // ฟ้า / ชมพู / เขียว (พาสเทล)
   [40,30,20].forEach(w=>{
     const a=A.cov(pt,total,w), b=A.cov(pb,total,w); const active=w===size;
     const h=sizeHue[w], ink=`oklch(0.45 0.16 ${h})`, sub=`oklch(0.55 0.10 ${h})`;
@@ -473,10 +473,10 @@ function render(){
 
   /* heatmap + curve */
   {
-    const sideC=side==='top'?c:c2; const cnts=side==='top'?ct:cb; const sp=side==='top'?pt:pb;
+    const sideC=side==='top'?cT:c2; const cnts=side==='top'?ct:cb; const sp=side==='top'?pt:pb;
     const cv=A.cov(sp,total,size);
     const maxF=Math.max(...cnts,1);
-    const heatHue=side==='top'?l.hue:HUE_BOTTOM;
+    const heatHue=side==='top'?TOP_HUE:BOT_HUE;
 
     const heatGrid = el('div',{style:{display:'grid',gridTemplateColumns:'repeat(10,1fr)',gap:'4px'}});
     cnts.forEach((f,nn)=>{
@@ -510,7 +510,7 @@ function render(){
     const cold=idx.slice(-6).reverse().map(nn=>el('span',{style:{fontWeight:'600',fontSize:'13px',padding:'4px 10px',borderRadius:'9px',background:'#f1eff5',color:'#a39db4'}},A.pad(nn)));
 
     const sideTabs=[['top','2 ตัวบน'],['bottom','2 ตัวล่าง']].map(([k,label])=>
-      el('button',{style:segStyle(side===k,k==='top'?c:c2),onClick:()=>A.setState({side:k})},label));
+      el('button',{style:segStyle(side===k,k==='top'?cT:c2),onClick:()=>A.setState({side:k})},label));
 
     detail.appendChild(el('div',{style:{background:'#fff',borderRadius:'24px',padding:'20px',boxShadow:'0 12px 32px rgba(60,40,100,.06)',border:'1px solid rgba(40,30,60,.05)',marginBottom:'18px'}},[
       el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'10px',marginBottom:'16px'}},[
@@ -551,9 +551,9 @@ function render(){
   {
     const recentRow = el('div',{class:'hscroll',style:{display:'flex',gap:'10px',overflowX:'auto',paddingBottom:'6px'}});
     A.draws().slice(-12).reverse().forEach(d=>{
-      recentRow.appendChild(el('div',{style:{flex:'0 0 auto',width:'94px',background:c.soft,borderRadius:'16px',padding:'11px',textAlign:'center'}},[
+      recentRow.appendChild(el('div',{style:{flex:'0 0 auto',width:'94px',background:cT.soft,borderRadius:'16px',padding:'11px',textAlign:'center'}},[
         el('div',{style:{fontSize:'11px',color:'#a9a2b8'}},A.short(d.ts)),
-        el('div',{style:{fontWeight:'600',fontSize:'23px',marginTop:'5px',color:c.deep}},A.pad(d.top)),
+        el('div',{style:{fontWeight:'600',fontSize:'23px',marginTop:'5px',color:cT.deep}},A.pad(d.top)),
         el('div',{style:{fontSize:'10px',color:'#b3adc0',marginTop:'4px'}},'ล่าง'),
         el('div',{style:{fontWeight:'500',fontSize:'16px',color:'#7c7690'}},A.pad(d.bottom)),
       ]));

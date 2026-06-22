@@ -140,8 +140,13 @@ const App = {
   pl(p){ return Math.round(p*100)+'%'; },
   conf(p){ return p>=0.6?'มั่นใจสูงมาก':p>=0.5?'มั่นใจสูง':p>=0.42?'ปานกลาง':'พอใช้'; },
   colorFor(hue){
-    const t=[0.74,0.16,0.53,0.205,0.965,0.06]; // พาสเทลสดใส (สว่าง+อิ่มสี)
-    return { accent:`oklch(${t[0]} ${t[1]} ${hue})`, deep:`oklch(${t[2]} ${t[3]} ${hue})`, soft:`oklch(${t[4]} ${t[5]} ${hue})`, hue };
+    // พาสเทลแท้: soft=พื้นอ่อนมาก, accent=พาสเทลกลาง (พื้น active), deep=โทนเข้มนุ่ม (ตัวอักษร/ตัวเลข อ่านง่าย)
+    return {
+      soft:`oklch(0.965 0.032 ${hue})`,
+      accent:`oklch(0.86 0.075 ${hue})`,
+      deep:`oklch(0.52 0.115 ${hue})`,
+      hue
+    };
   },
   dataRange(){ const a=this.draws(); return a.length ? {min:new Date(a[0].ts), max:new Date(a[a.length-1].ts)} : {min:new Date(2025,0,1), max:new Date()}; },
   applyPreset(k){
@@ -242,11 +247,10 @@ function render(){
   const todayISO = new Date().toISOString().slice(0,10);
   const TOP_HUE = 345, BOT_HUE = 82;  // บน = ชมพู, ล่าง = เหลืองทอง (เลิกใช้เขียวมิ้น)
   const l = A.lot(), c = C(l.hue), cT = C(TOP_HUE), c2 = C(BOT_HUE); // c = สีประจำหวย, cT = บน(ชมพู), c2 = ล่าง(เหลือง)
-  const bg=`linear-gradient(160deg, oklch(0.975 0.03 ${l.hue}) 0%, oklch(0.965 0.05 ${l.hue+42}) 100%)`; // พื้นหลังพาสเทลตามสีหวย
-  const brandBg=`linear-gradient(135deg, oklch(0.66 0.18 ${l.hue}), oklch(0.60 0.20 ${l.hue+34}))`;
-  /* gradient ไล่เฉดสำหรับการ์ดสีสด */
-  const grad=(h1,h2)=>`linear-gradient(135deg, oklch(0.60 0.19 ${h1}) 0%, oklch(0.53 0.21 ${h2}) 100%)`;
-  const heroGrad=grad(l.hue, l.hue+34); // hero ใช้สีประจำหวย
+  const ink='#3c3650', sub='#8a85a0';        // ตัวอักษรหลัก/รอง (นุ่ม)
+  const bg=`linear-gradient(165deg, oklch(0.99 0.01 ${l.hue}) 0%, oklch(0.975 0.022 ${l.hue+45}) 100%)`; // พื้นหลังขาวนวล แต้มสีจางๆ
+  const brandBg=`linear-gradient(135deg, oklch(0.82 0.10 ${l.hue}), oklch(0.76 0.11 ${l.hue+34}))`;
+  const heroGrad=`linear-gradient(140deg, oklch(0.955 0.045 ${l.hue}) 0%, oklch(0.93 0.06 ${l.hue+34}) 100%)`; // hero พาสเทลอ่อน (ตัวอักษรเข้ม)
 
   const root = document.getElementById('root');
   root.innerHTML='';
@@ -262,7 +266,7 @@ function render(){
       el('div',{style:{fontSize:'11px',color:'#9b94ad',letterSpacing:'.03em'}},'วิเคราะห์หวยลาว/ฮานอยจากสถิติ'),
     ]),
   ]);
-  const updBtn = el('button',{style:{display:'inline-flex',alignItems:'center',gap:'7px',padding:'9px 17px',borderRadius:'999px',border:'none',cursor:A.updating?'default':'pointer',fontWeight:'600',fontSize:'13px',background:A.updating?'#cfc7e0':c.deep,color:'#fff',opacity:A.updating?'.85':'1',transition:'all .15s'},
+  const updBtn = el('button',{style:{display:'inline-flex',alignItems:'center',gap:'7px',padding:'9px 17px',borderRadius:'999px',border:'1px solid '+c.accent,cursor:A.updating?'default':'pointer',fontWeight:'700',fontSize:'13px',background:c.accent,color:c.deep,opacity:A.updating?'.7':'1',transition:'all .15s'},
     onClick:()=>A.update()},[
       el('span',{style:A.updating?{display:'inline-block',animation:'spin .8s linear infinite'}:{}},'⟳'),
       el('span',{},A.updating?'กำลังดึงผล…':'อัปเดตผลจริง'),
@@ -272,8 +276,8 @@ function render(){
   /* ---------- เลือกหวย ---------- */
   wrap.appendChild(el('div',{class:'hscroll',style:{display:'flex',gap:'8px',overflowX:'auto',marginBottom:'12px',paddingBottom:'3px'}},
     A.LOTTERIES.map(L=>{ const active=A.state.lottery===L.id;
-      return el('button',{style:{padding:'8px 16px',borderRadius:'999px',fontWeight:'600',fontSize:'13px',cursor:'pointer',whiteSpace:'nowrap',
-        border:'1px solid '+(active?c.deep:'rgba(40,30,60,.12)'),background:active?c.deep:'#fff',color:active?'#fff':'#6c6680',transition:'all .15s'},
+      return el('button',{style:{padding:'8px 16px',borderRadius:'999px',fontWeight:active?'700':'600',fontSize:'13px',cursor:'pointer',whiteSpace:'nowrap',
+        border:'1px solid '+(active?c.accent:'rgba(40,30,60,.12)'),background:active?c.accent:'#fff',color:active?c.deep:'#8a85a0',transition:'all .15s'},
         onClick:()=>A.selectLottery(L.id)}, L.name);
     })));
 
@@ -287,9 +291,9 @@ function render(){
   wrap.appendChild(el('div',{style:{fontSize:'12px',color:statusColor,margin:'0 0 14px',lineHeight:'1.5'}},statusText));
 
   /* ---------- tabs (สลับหน้า) ---------- */
-  const tabBtn=(v,label)=>el('button',{style:{padding:'9px 16px',borderRadius:'999px',fontWeight:'600',fontSize:'14px',cursor:'pointer',whiteSpace:'nowrap',
-    border:'1px solid '+(A.state.view===v?c.deep:'rgba(40,30,60,.10)'),background:A.state.view===v?c.deep:'#fff',color:A.state.view===v?'#fff':'#6c6680',transition:'all .15s'},
-    onClick:()=>A.setState({view:v, openCal:null})},label);
+  const tabBtn=(v,label)=>{ const on=A.state.view===v; return el('button',{style:{padding:'9px 16px',borderRadius:'999px',fontWeight:on?'700':'600',fontSize:'14px',cursor:'pointer',whiteSpace:'nowrap',
+    border:'1px solid '+(on?c.accent:'rgba(40,30,60,.10)'),background:on?c.accent:'#fff',color:on?c.deep:'#8a85a0',transition:'all .15s'},
+    onClick:()=>A.setState({view:v, openCal:null})},label); };
   wrap.appendChild(el('div',{style:{display:'flex',gap:'8px',marginBottom:'16px',flexWrap:'wrap'}},[
     tabBtn('analyze','วิเคราะห์ช่วงเลข'), tabBtn('table','สถิติเลข 00–99'),
   ]));
@@ -308,7 +312,7 @@ function render(){
   const pt=A.pre(ct), pb=A.pre(cb);
   const last=allDr[allDr.length-1];
 
-  const segStyle=(a,cc)=>({padding:'7px 13px',borderRadius:'999px',fontSize:'13px',fontWeight:'600',cursor:'pointer',border:'1px solid '+(a?cc.deep:'rgba(40,30,60,.1)'),background:a?cc.deep:'#fff',color:a?'#fff':'#6c6680',transition:'all .15s'});
+  const segStyle=(a,cc)=>({padding:'7px 13px',borderRadius:'999px',fontSize:'13px',fontWeight:a?'700':'600',cursor:'pointer',border:'1px solid '+(a?cc.accent:'rgba(40,30,60,.1)'),background:a?cc.accent:'#fff',color:a?cc.deep:'#8a85a0',transition:'all .15s'});
   const chip=(cc)=>({fontWeight:'500',fontSize:'13px',width:'34px',padding:'4px 0',textAlign:'center',borderRadius:'9px',background:cc.soft,color:cc.deep});
 
   /* ---- shared: filter helpers + date picker (ใช้ทั้ง 2 หน้า) ---- */
@@ -381,15 +385,15 @@ function render(){
   /* ====================== หน้าสถิติเลข 00–99 ====================== */
   if(A.state.view==='table'){
     const tbl = el('div',{style:{animation:'pop .35s ease both'}});
-    tbl.appendChild(el('div',{style:{position:'relative',overflow:'hidden',background:heroGrad,borderRadius:'26px',padding:'22px 24px',marginBottom:'18px',boxShadow:'0 18px 38px rgba(150,90,200,.30)'}},[
-      el('div',{style:{position:'absolute',right:'-34px',top:'-34px',width:'150px',height:'150px',borderRadius:'50%',background:'rgba(255,255,255,.13)'}}),
+    tbl.appendChild(el('div',{style:{position:'relative',overflow:'hidden',background:heroGrad,borderRadius:'26px',padding:'22px 24px',marginBottom:'18px',boxShadow:'0 12px 30px '+c.soft,border:'1px solid '+c.accent}},[
+      el('div',{style:{position:'absolute',right:'-30px',top:'-30px',width:'150px',height:'150px',borderRadius:'50%',background:`oklch(0.91 0.06 ${l.hue})`,opacity:'.6'}}),
       el('div',{style:{position:'relative'}},[
         el('div',{style:{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}},[
-          el('span',{style:{fontWeight:'600',fontSize:'14px',padding:'6px 15px',borderRadius:'999px',background:'rgba(255,255,255,.25)',color:'#fff'}},l.name),
-          el('span',{style:{fontSize:'11px',fontWeight:'600',padding:'3px 10px',borderRadius:'999px',background:'rgba(255,255,255,.22)',color:'#fff'}}, real?('● ข้อมูลจริง '+A.draws().length+' งวด'):'● ข้อมูลตัวอย่าง'),
+          el('span',{style:{fontWeight:'700',fontSize:'14px',padding:'6px 15px',borderRadius:'999px',background:'#fff',color:c.deep}},l.name),
+          el('span',{style:{fontSize:'11px',fontWeight:'700',padding:'3px 10px',borderRadius:'999px',background:'rgba(255,255,255,.7)',color:c.deep}}, real?('● ข้อมูลจริง '+A.draws().length+' งวด'):'● ข้อมูลตัวอย่าง'),
         ]),
-        el('h1',{style:{fontWeight:'600',fontSize:'28px',margin:'12px 0 0',color:'#fff'}},'สถิติเลข 00–99'),
-        el('div',{style:{fontSize:'13px',color:'rgba(255,255,255,.85)',marginTop:'5px'}},'แต่ละเลขออกเป็น 2 ตัวบน / 2 ตัวล่าง ไปแล้วกี่ครั้ง คิดเป็นกี่ % จาก '+total.toLocaleString()+' งวด ('+A.thai(fa)+' – '+A.thai(Date.parse(A.state.dateTo))+')'),
+        el('h1',{style:{fontWeight:'700',fontSize:'28px',margin:'12px 0 0',color:ink}},'สถิติเลข 00–99'),
+        el('div',{style:{fontSize:'13px',color:sub,marginTop:'5px'}},'แต่ละเลขออกเป็น 2 ตัวบน / 2 ตัวล่าง ไปแล้วกี่ครั้ง คิดเป็นกี่ % จาก '+total.toLocaleString()+' งวด ('+A.thai(fa)+' – '+A.thai(Date.parse(A.state.dateTo))+')'),
       ]),
     ]));
     tbl.appendChild(filterBar(false));
@@ -438,24 +442,24 @@ function render(){
   const detail = el('div',{style:{animation:'pop .35s ease both'}});
 
   /* header — gradient hero */
-  const frost=(label,val)=>el('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',padding:'10px 20px',borderRadius:'18px',background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.32)'}},[
-    el('span',{style:{fontSize:'10px',color:'rgba(255,255,255,.88)'}},label),
-    el('span',{style:{fontWeight:'700',fontSize:'24px',color:'#fff'}},val),
+  const frost=(label,val,fc)=>el('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',padding:'10px 20px',borderRadius:'18px',background:'#fff',boxShadow:'0 6px 16px '+fc.soft}},[
+    el('span',{style:{fontSize:'10px',color:sub}},label),
+    el('span',{style:{fontWeight:'700',fontSize:'24px',color:fc.deep}},val),
   ]);
-  const heroBadge=(txt)=>el('span',{style:{fontSize:'11px',fontWeight:'600',padding:'3px 10px',borderRadius:'999px',background:'rgba(255,255,255,.22)',color:'#fff'}},txt);
-  detail.appendChild(el('div',{style:{position:'relative',overflow:'hidden',background:heroGrad,borderRadius:'26px',padding:'22px 24px',marginBottom:'18px',boxShadow:'0 18px 38px rgba(150,90,200,.30)'}},[
-    el('div',{style:{position:'absolute',right:'-34px',top:'-34px',width:'150px',height:'150px',borderRadius:'50%',background:'rgba(255,255,255,.13)'}}),
-    el('div',{style:{position:'absolute',right:'58px',bottom:'-44px',width:'96px',height:'96px',borderRadius:'50%',background:'rgba(255,255,255,.09)'}}),
+  const heroBadge=(txt)=>el('span',{style:{fontSize:'11px',fontWeight:'700',padding:'3px 10px',borderRadius:'999px',background:'rgba(255,255,255,.7)',color:c.deep}},txt);
+  detail.appendChild(el('div',{style:{position:'relative',overflow:'hidden',background:heroGrad,borderRadius:'26px',padding:'22px 24px',marginBottom:'18px',boxShadow:'0 12px 30px '+c.soft,border:'1px solid '+c.accent}},[
+    el('div',{style:{position:'absolute',right:'-30px',top:'-30px',width:'150px',height:'150px',borderRadius:'50%',background:`oklch(0.91 0.06 ${l.hue})`,opacity:'.6'}}),
+    el('div',{style:{position:'absolute',right:'58px',bottom:'-44px',width:'96px',height:'96px',borderRadius:'50%',background:`oklch(0.93 0.05 ${l.hue+34})`,opacity:'.6'}}),
     el('div',{style:{position:'relative',display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:'16px',flexWrap:'wrap'}},[
       el('div',{},[
         el('div',{style:{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}},[
-          el('span',{style:{fontWeight:'600',fontSize:'14px',padding:'6px 15px',borderRadius:'999px',background:'rgba(255,255,255,.25)',color:'#fff'}},l.name),
+          el('span',{style:{fontWeight:'700',fontSize:'14px',padding:'6px 15px',borderRadius:'999px',background:'#fff',color:c.deep}},l.name),
           heroBadge(real?('● ข้อมูลจริง '+A.draws().length+' งวด'):'● ข้อมูลตัวอย่าง'),
         ]),
-        el('h1',{style:{fontWeight:'600',fontSize:'28px',margin:'12px 0 0',color:'#fff'}},'วิเคราะห์ช่วงเลข'),
-        el('div',{style:{fontSize:'13px',color:'rgba(255,255,255,.85)',marginTop:'5px'}},'ช่วงข้อมูล '+A.thai(fa)+' – '+A.thai(Date.parse(A.state.dateTo))+' • '+total.toLocaleString()+' งวด'+(real?' • Sanook':'')),
+        el('h1',{style:{fontWeight:'700',fontSize:'28px',margin:'12px 0 0',color:ink}},'วิเคราะห์ช่วงเลข'),
+        el('div',{style:{fontSize:'13px',color:sub,marginTop:'5px'}},'ช่วงข้อมูล '+A.thai(fa)+' – '+A.thai(Date.parse(A.state.dateTo))+' • '+total.toLocaleString()+' งวด'+(real?' • Sanook':'')),
       ]),
-      last?el('div',{style:{display:'flex',gap:'10px'}},[ frost('ล่าสุด บน',A.pad(last.top)), frost('ล่าสุด ล่าง',A.pad(last.bottom)) ]):null,
+      last?el('div',{style:{display:'flex',gap:'10px'}},[ frost('ล่าสุด บน',A.pad(last.top),cT), frost('ล่าสุด ล่าง',A.pad(last.bottom),c2) ]):null,
     ]),
   ]));
 
@@ -486,11 +490,11 @@ function render(){
   detail.appendChild(el('div',{style:{fontSize:'13px',color:'#9b94ad',marginBottom:'9px'}},'เทียบขนาดชุด — ยิ่งซื้อกว้าง โอกาสยิ่งสูง แต่ต้นทุนมากขึ้น (กดเพื่อเลือก)'));
   const sizeCardGrid = el('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:'12px',marginBottom:'22px'}});
   // พาสเทล: ไล่เฉดอ่อน + ตัวอักษรสีเข้มของโทนนั้น
-  const pastelGrad=(h)=>`linear-gradient(135deg, oklch(0.93 0.055 ${h}) 0%, oklch(0.88 0.085 ${h+18}) 100%)`;
+  const pastelGrad=(h)=>`linear-gradient(135deg, oklch(0.955 0.04 ${h}) 0%, oklch(0.915 0.062 ${h+18}) 100%)`;
   const sizeHue={40:250, 30:338, 20:148}; // ฟ้า / ชมพู / เขียว (พาสเทล)
   [40,30,20].forEach(w=>{
     const a=A.cov(pt,total,w), b=A.cov(pb,total,w); const active=w===size;
-    const h=sizeHue[w], ink=`oklch(0.45 0.16 ${h})`, sub=`oklch(0.55 0.10 ${h})`;
+    const h=sizeHue[w], ink=`oklch(0.48 0.125 ${h})`, sub=`oklch(0.58 0.085 ${h})`;
     sizeCardGrid.appendChild(el('div',{style:{background:pastelGrad(h),borderRadius:'20px',padding:'15px 16px',cursor:'pointer',color:ink,position:'relative',overflow:'hidden',transition:'all .15s',
       boxShadow:active?('0 12px 26px oklch(0.7 0.12 '+h+' / .45)'):'0 5px 14px rgba(60,40,100,.08)',
       border:active?('2px solid oklch(0.66 0.14 '+h+')'):'2px solid transparent', transform:active?'translateY(-2px)':'none'},
@@ -524,7 +528,7 @@ function render(){
     const heatGrid = el('div',{style:{display:'grid',gridTemplateColumns:'repeat(10,1fr)',gap:'4px'}});
     cnts.forEach((f,nn)=>{
       const it=f/maxF; const inWin=nn>=cv.best.s&&nn<cv.best.s+size;
-      heatGrid.appendChild(el('div',{style:{aspectRatio:'1',display:'grid',placeItems:'center',fontSize:'11px',fontWeight:inWin?'700':'500',borderRadius:'8px',background:`oklch(${0.97-0.45*it} ${0.012+0.135*it} ${heatHue})`,color:it>0.52?'#fff':'#544c68',boxShadow:inWin?'0 0 0 2px '+sideC.deep+' inset':'none'}},A.pad(nn)));
+      heatGrid.appendChild(el('div',{style:{aspectRatio:'1',display:'grid',placeItems:'center',fontSize:'11px',fontWeight:inWin?'700':'500',borderRadius:'8px',background:`oklch(${0.965-0.40*it} ${0.01+0.11*it} ${heatHue})`,color:it>0.58?'#fff':'#544c68',boxShadow:inWin?'0 0 0 2px '+sideC.deep+' inset':'none'}},A.pad(nn)));
     });
 
     const n=cv.pts.length, maxP=Math.max(...cv.pts)||1;
@@ -545,11 +549,11 @@ function render(){
     poly.style.vectorEffect='non-scaling-stroke';
     svg.appendChild(pathEl); svg.appendChild(poly);
 
-    const marker=el('div',{style:{position:'absolute',left:mLeft+'%',top:mTop+'%',transform:'translate(-50%,-130%)',background:sideC.deep,color:'#fff',fontSize:'11px',fontWeight:'600',padding:'2px 8px',borderRadius:'999px',whiteSpace:'nowrap'}},A.pl(cv.best.p));
+    const marker=el('div',{style:{position:'absolute',left:mLeft+'%',top:mTop+'%',transform:'translate(-50%,-130%)',background:sideC.accent,color:sideC.deep,fontSize:'11px',fontWeight:'700',padding:'2px 8px',borderRadius:'999px',whiteSpace:'nowrap'}},A.pl(cv.best.p));
     const curveWrap=el('div',{style:{position:'relative'}}); curveWrap.appendChild(svg); curveWrap.appendChild(marker);
 
     const idx=[...cnts.keys()].sort((a,b)=>cnts[b]-cnts[a]);
-    const hot=idx.slice(0,6).map(nn=>el('span',{style:{fontWeight:'600',fontSize:'13px',padding:'4px 10px',borderRadius:'9px',background:sideC.deep,color:'#fff'}},A.pad(nn)));
+    const hot=idx.slice(0,6).map(nn=>el('span',{style:{fontWeight:'700',fontSize:'13px',padding:'4px 10px',borderRadius:'9px',background:sideC.accent,color:sideC.deep}},A.pad(nn)));
     const cold=idx.slice(-6).reverse().map(nn=>el('span',{style:{fontWeight:'600',fontSize:'13px',padding:'4px 10px',borderRadius:'9px',background:'#f1eff5',color:'#a39db4'}},A.pad(nn)));
 
     const sideTabs=[['top','2 ตัวบน'],['bottom','2 ตัวล่าง']].map(([k,label])=>

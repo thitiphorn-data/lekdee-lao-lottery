@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>เลขดี — วิเคราะห์หวยลาวจากสถิติ</title>
+<title>เลขดี — วิเคราะห์หวยลาว/ฮานอยจากสถิติ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -68,13 +68,12 @@ const App = {
 
   /* หวยที่รองรับ (ลาว + ฮานอย 4 ประเภท) */
   LOTTERIES: [
-    { id:'lao',          name:'หวยลาว' },
-    { id:'hanoi',        name:'ฮานอย' },
-    { id:'hanoiSpecial', name:'ฮานอยพิเศษ' },
-    { id:'hanoiVip',     name:'ฮานอย VIP' },
-    { id:'hanoiTask',    name:'ฮานอยเฉพาะกิจ' },
+    { id:'lao',          name:'หวยลาว',        hue:168 }, // เขียวมินต์-เทอควอยซ์
+    { id:'hanoi',        name:'ฮานอย',         hue:255 }, // น้ำเงิน-คราม
+    { id:'hanoiSpecial', name:'ฮานอยพิเศษ',    hue:300 }, // ม่วง
+    { id:'hanoiVip',     name:'ฮานอย VIP',     hue:28  }, // ส้ม-โคออรล
+    { id:'hanoiTask',    name:'ฮานอยเฉพาะกิจ', hue:200 }, // ฟ้า-cyan
   ],
-  HUE: 292, // สีหลัก = ม่วงลาเวนเดอร์ (ใช้ทุกหวย)
   HANOI_KEYS: ['hanoi','hanoiSpecial','hanoiVip','hanoiTask'],
   lot(){ return this.LOTTERIES.find(x=>x.id===this.state.lottery) || this.LOTTERIES[0]; },
   TM: ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'],
@@ -141,7 +140,7 @@ const App = {
   pl(p){ return Math.round(p*100)+'%'; },
   conf(p){ return p>=0.6?'มั่นใจสูงมาก':p>=0.5?'มั่นใจสูง':p>=0.42?'ปานกลาง':'พอใช้'; },
   colorFor(hue){
-    const t=[0.68,0.155,0.50,0.205,0.955,0.045]; // sweet/candy — เข้มและอิ่มสีกว่าเดิม
+    const t=[0.74,0.16,0.53,0.205,0.965,0.06]; // พาสเทลสดใส (สว่าง+อิ่มสี)
     return { accent:`oklch(${t[0]} ${t[1]} ${hue})`, deep:`oklch(${t[2]} ${t[3]} ${hue})`, soft:`oklch(${t[4]} ${t[5]} ${hue})`, hue };
   },
   dataRange(){ const a=this.draws(); return a.length ? {min:new Date(a[0].ts), max:new Date(a[a.length-1].ts)} : {min:new Date(2025,0,1), max:new Date()}; },
@@ -242,11 +241,12 @@ function render(){
   const size = A.state.size||A.state.windowSize, side = A.state.side;
   const todayISO = new Date().toISOString().slice(0,10);
   const TOP_HUE = 345, BOT_HUE = 82;  // บน = ชมพู, ล่าง = เหลืองทอง (เลิกใช้เขียวมิ้น)
-  const l = A.lot(), c = C(A.HUE), cT = C(TOP_HUE), c2 = C(BOT_HUE); // c = ม่วง (สีหลัก), cT = บน, c2 = ล่าง
-  const bg='linear-gradient(160deg,#ECEDFB 0%,#F1EBFB 50%,#FBEDF6 100%)';
-  const brandBg=`linear-gradient(135deg, ${C(278).accent}, ${C(330).accent})`;
+  const l = A.lot(), c = C(l.hue), cT = C(TOP_HUE), c2 = C(BOT_HUE); // c = สีประจำหวย, cT = บน(ชมพู), c2 = ล่าง(เหลือง)
+  const bg=`linear-gradient(160deg, oklch(0.975 0.03 ${l.hue}) 0%, oklch(0.965 0.05 ${l.hue+42}) 100%)`; // พื้นหลังพาสเทลตามสีหวย
+  const brandBg=`linear-gradient(135deg, oklch(0.66 0.18 ${l.hue}), oklch(0.60 0.20 ${l.hue+34}))`;
   /* gradient ไล่เฉดสำหรับการ์ดสีสด */
-  const grad=(h1,h2)=>`linear-gradient(135deg, oklch(0.62 0.19 ${h1}) 0%, oklch(0.56 0.21 ${h2}) 100%)`;
+  const grad=(h1,h2)=>`linear-gradient(135deg, oklch(0.60 0.19 ${h1}) 0%, oklch(0.53 0.21 ${h2}) 100%)`;
+  const heroGrad=grad(l.hue, l.hue+34); // hero ใช้สีประจำหวย
 
   const root = document.getElementById('root');
   root.innerHTML='';
@@ -381,7 +381,7 @@ function render(){
   /* ====================== หน้าสถิติเลข 00–99 ====================== */
   if(A.state.view==='table'){
     const tbl = el('div',{style:{animation:'pop .35s ease both'}});
-    tbl.appendChild(el('div',{style:{position:'relative',overflow:'hidden',background:grad(284,332),borderRadius:'26px',padding:'22px 24px',marginBottom:'18px',boxShadow:'0 18px 38px rgba(150,90,200,.30)'}},[
+    tbl.appendChild(el('div',{style:{position:'relative',overflow:'hidden',background:heroGrad,borderRadius:'26px',padding:'22px 24px',marginBottom:'18px',boxShadow:'0 18px 38px rgba(150,90,200,.30)'}},[
       el('div',{style:{position:'absolute',right:'-34px',top:'-34px',width:'150px',height:'150px',borderRadius:'50%',background:'rgba(255,255,255,.13)'}}),
       el('div',{style:{position:'relative'}},[
         el('div',{style:{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}},[
@@ -443,7 +443,7 @@ function render(){
     el('span',{style:{fontWeight:'700',fontSize:'24px',color:'#fff'}},val),
   ]);
   const heroBadge=(txt)=>el('span',{style:{fontSize:'11px',fontWeight:'600',padding:'3px 10px',borderRadius:'999px',background:'rgba(255,255,255,.22)',color:'#fff'}},txt);
-  detail.appendChild(el('div',{style:{position:'relative',overflow:'hidden',background:grad(284,332),borderRadius:'26px',padding:'22px 24px',marginBottom:'18px',boxShadow:'0 18px 38px rgba(150,90,200,.30)'}},[
+  detail.appendChild(el('div',{style:{position:'relative',overflow:'hidden',background:heroGrad,borderRadius:'26px',padding:'22px 24px',marginBottom:'18px',boxShadow:'0 18px 38px rgba(150,90,200,.30)'}},[
     el('div',{style:{position:'absolute',right:'-34px',top:'-34px',width:'150px',height:'150px',borderRadius:'50%',background:'rgba(255,255,255,.13)'}}),
     el('div',{style:{position:'absolute',right:'58px',bottom:'-44px',width:'96px',height:'96px',borderRadius:'50%',background:'rgba(255,255,255,.09)'}}),
     el('div',{style:{position:'relative',display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:'16px',flexWrap:'wrap'}},[

@@ -28,14 +28,18 @@ jobs:
       - name: ดึงผลหวยลาวล่าสุด
         run: python tools/fetch_history.py
 
+      - name: ดึงผลหวยฮานอยล่าสุด
+        run: python tools/fetch_hanoi.py
+
       - name: commit + push ถ้ามีงวดใหม่
         run: |
-          if git diff --quiet -- lao_history.json; then
+          if git diff --quiet -- lao_history.json hanoi_history.json; then
             echo "ไม่มีงวดใหม่ — ข้าม"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lao_history.js lao_history.json lao_history.csv lao_history.xlsx
-          git commit -m "อัปเดตผลหวยลาวอัตโนมัติ $(date -u +%Y-%m-%d)"
+          git add lao_history.js lao_history.json lao_history.csv lao_history.xlsx \
+                  hanoi_history.js hanoi_history.json hanoi_history.csv hanoi_history.xlsx
+          git commit -m "อัปเดตผลหวยลาว+ฮานอยอัตโนมัติ $(date -u +%Y-%m-%d)"
           git push

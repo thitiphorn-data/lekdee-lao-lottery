@@ -23,8 +23,9 @@
 </head>
 <body>
 <div id="root"></div>
-<!-- ประวัติผลหวยลาวจริง 1 ม.ค. 2568 → ปัจจุบัน (สร้างจาก tools/fetch_history.py) -->
+<!-- ประวัติผลหวยจริง (สร้างจาก tools/fetch_history.py + tools/fetch_hanoi.py) -->
 <script src="lao_history.js"></script>
+<script src="hanoi_history.js"></script>
 <script>
 "use strict";
 
@@ -60,54 +61,72 @@ const App = {
     dateFrom:'2025-01-01', dateTo:new Date().toISOString().slice(0,10),
     preset:'all', side:'top',
     openCal:null, calMonth:0,  // custom dd/mm/yyyy date picker
-    view:'analyze'             // 'analyze' | 'table'
+    view:'analyze',            // 'analyze' | 'table'
+    lottery:'lao'              // หวยที่เลือก
   },
   theme:'pastel',
 
-  /* หวยลาวอย่างเดียว */
-  LAO: { id:'lao', name:'หวยลาว', hue:292, seed:1011, tc:46, ts:13, bc:54, bs:12 }, // hue 292 = ม่วงลาเวนเดอร์ (โมเดิร์น)
+  /* หวยที่รองรับ (ลาว + ฮานอย 4 ประเภท) */
+  LOTTERIES: [
+    { id:'lao',          name:'หวยลาว' },
+    { id:'hanoi',        name:'ฮานอย' },
+    { id:'hanoiSpecial', name:'ฮานอยพิเศษ' },
+    { id:'hanoiVip',     name:'ฮานอย VIP' },
+    { id:'hanoiTask',    name:'ฮานอยเฉพาะกิจ' },
+  ],
+  HUE: 292, // สีหลัก = ม่วงลาเวนเดอร์ (ใช้ทุกหวย)
+  HANOI_KEYS: ['hanoi','hanoiSpecial','hanoiVip','hanoiTask'],
+  lot(){ return this.LOTTERIES.find(x=>x.id===this.state.lottery) || this.LOTTERIES[0]; },
   TM: ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'],
 
   /* live-update state */
-  _mock:null, _real:null, _seed:null, lastUpdated:0, updating:false, updateStatus:'', updateOk:null,
+  _mock:null, _real:null, _seed:null, lastUpd:null, updating:false, updateStatus:'', updateOk:null,
 
   setState(patch){ Object.assign(this.state, patch); render(); },
+  selectLottery(id){ this.state.lottery=id; this.state.openCal=null; this.applyPreset('all'); },
 
-  /* ---- seeded sample data (ใช้ก่อนมีข้อมูลจริง) ---- */
+  /* ---- mock สำรอง (เฉพาะลาว กรณีไม่มี seed) ---- */
   mul(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; },
   g(rng,c,s){ let v; if(rng()<0.12) v=Math.floor(rng()*100); else v=Math.round(c+(rng()+rng()+rng()-1.5)*s*1.35); return Math.max(0,Math.min(99,v)); },
   _ensure(){
-    if(this._mock) return;
-    const l=this.LAO; const rng=this.mul(l.seed); const draws=[];
-    const start=new Date(2025,0,1); const end=new Date();
-    for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
-      draws.push({ ts:d.getTime(), top:this.g(rng,l.tc,l.ts), bottom:this.g(rng,l.bc,l.bs) });
-    }
-    this._mock=draws;
-    if(!this._real) this.loadReal();
-    this.loadSeed();
+    if(this._seed) return;
+    const rng=this.mul(1011); const mock=[]; const start=new Date(2025,0,1), end=new Date();
+    for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)) mock.push({ts:d.getTime(),top:this.g(rng,46,13),bottom:this.g(rng,54,12)});
+    this._mock=mock;
+    this.loadSeed(); this.loadReal();
   },
 
-  /* ---- real data layer (localStorage) ---- */
-  STORE_KEY:'legdee_lao_v3',
+  /* ---- ข้อมูลในตัว (seed) ต่อหวย ---- */
+  loadSeed(){
+    if(this._seed) return;
+    const s={ lao: Array.isArray(window.LAO_HISTORY) ? window.LAO_HISTORY.slice() : [] };
+    const H=window.HANOI_HISTORY||{};
+    for(const k of this.HANOI_KEYS) s[k]=Array.isArray(H[k])?H[k].slice():[];
+    this._seed=s;
+  },
+
+  /* ---- real data layer (localStorage) — เก็บแยกต่อหวย ---- */
+  STORE_KEY:'legdee_real_v4',
   loadReal(){
-    try{ const o=JSON.parse(localStorage.getItem(this.STORE_KEY)||'{}'); this._real=o.draws||[]; this.lastUpdated=o.lastUpdated||0; }
-    catch(e){ this._real=[]; this.lastUpdated=0; }
+    try{ const o=JSON.parse(localStorage.getItem(this.STORE_KEY)||'{}'); this._real=o.real||{}; this.lastUpd=o.lastUpd||{}; }
+    catch(e){ this._real={}; this.lastUpd={}; }
   },
-  saveReal(){ try{ localStorage.setItem(this.STORE_KEY, JSON.stringify({draws:this._real,lastUpdated:this.lastUpdated})); }catch(e){} },
+  saveReal(){ try{ localStorage.setItem(this.STORE_KEY, JSON.stringify({real:this._real,lastUpd:this.lastUpd})); }catch(e){} },
   ymd(ts){ const d=new Date(ts); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); },
-  mergeReal(list){
-    const byDay={}; for(const d of (this._real||[])) byDay[this.ymd(d.ts)]=d;
+  mergeReal(list, id){
+    const cur=this._real[id]||[]; const byDay={};
+    for(const d of cur) byDay[this.ymd(d.ts)]=d;
     for(const d of list) byDay[this.ymd(d.ts)]={ts:d.ts,top:d.top,bottom:d.bottom};
-    this._real=Object.values(byDay).sort((a,b)=>a.ts-b.ts);
+    this._real[id]=Object.values(byDay).sort((a,b)=>a.ts-b.ts);
   },
-  loadSeed(){ if(this._seed===null) this._seed = Array.isArray(window.LAO_HISTORY) ? window.LAO_HISTORY.slice() : []; },
-  isReal(){ return (this._seed&&this._seed.length)||(this._real&&this._real.length); },
-  draws(){
-    if(!this.isReal()) return this._mock;
+  isReal(id){ id=id||this.state.lottery; return ((this._seed[id]||[]).length>0)||((this._real[id]||[]).length>0); },
+  draws(id){
+    id=id||this.state.lottery;
+    const seed=this._seed[id]||[], real=this._real[id]||[];
+    if(!seed.length && !real.length) return id==='lao'? this._mock : [];
     const byDay={};
-    for(const d of (this._seed||[])) byDay[this.ymd(d.ts)]=d;
-    for(const d of (this._real||[])) byDay[this.ymd(d.ts)]=d; // ผลที่กดอัปเดตใหม่ทับของในตัว
+    for(const d of seed) byDay[this.ymd(d.ts)]=d;
+    for(const d of real) byDay[this.ymd(d.ts)]=d; // ผลที่กดอัปเดตใหม่ทับของในตัว
     return Object.values(byDay).sort((a,b)=>a.ts-b.ts);
   },
 
@@ -135,19 +154,33 @@ const App = {
   },
 
   /* ---- live update: ยิงหลาย proxy พร้อมกัน เอาอันที่เร็วสุดที่สำเร็จ ---- */
-  sourceUrl(){ // หน้า "งวดวันนี้" ของ Sanook ฝัง JSON ผล ~10 งวดล่าสุดไว้
-    const d=new Date();
-    return 'https://www.sanook.com/news/laolotto/'+this.pad(d.getDate())+this.pad(d.getMonth()+1)+(d.getFullYear()+543)+'/';
-  },
-  parse(html){
-    // ดึงจาก Apollo JSON: "dateSlug":"DDMMYYYY" ... "last4Prize":"NNNN" (≈10 งวด/หน้า)
+  laoUrl(){ const d=new Date(); return 'https://www.sanook.com/news/laolotto/'+this.pad(d.getDate())+this.pad(d.getMonth()+1)+(d.getFullYear()+543)+'/'; },
+  hanoiUrl(){ return 'https://www.sanook.com/news/9837690/'; },
+  parseLao(html){
     const re=/"dateSlug\\?":\\?"(\d{2})(\d{2})(\d{4})"[\s\S]{0,400}?"last4Prize\\?":\\?"(\d{4})"/g;
     const out=[]; const seen={}; let m;
     while((m=re.exec(html))){
       const key=m[1]+m[2]+m[3]; if(seen[key]) continue; seen[key]=1;
       const dd=+m[1], mm=+m[2], be=+m[3], n4=+m[4];
       const ts=new Date(be-543, mm-1, dd).getTime();
-      out.push({ ts, top:n4%100, bottom:Math.floor(n4/100) }); // 4240 → บน 40 (เลขท้าย 2 ตัว) / ล่าง 42 (คู่หน้า)
+      out.push({ ts, top:n4%100, bottom:Math.floor(n4/100) });
+    }
+    return out;
+  },
+  parseHanoi(raw){
+    const text=raw.replace(/<[^>]+>/g,' ').replace(/&[a-z#0-9]+;/gi,' ').replace(/\s+/g,' ');
+    const TYPES={'ปกติ':'hanoi','พิเศษ':'hanoiSpecial','vip':'hanoiVip','เฉพาะกิจ':'hanoiTask'};
+    const dmarks=[]; let dm; const dre=/หวยฮานอย\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})/g;
+    while((dm=dre.exec(text))) dmarks.push([dm.index,+dm[1],+dm[2],+dm[3]]);
+    const out={hanoi:[],hanoiSpecial:[],hanoiVip:[],hanoiTask:[]}; const seen={};
+    const bre=/ผลหวยฮานอย([฀-๿a-zA-Z ]{0,14}?)\s*(?:เลข\s*4\s*ตัว\s*:\s*\d+\s*)?เลข\s*3\s*ตัวบน\s*:\s*\d{3}\s*เลข\s*2\s*ตัวบน\s*:\s*(\d{2})\s*เลข\s*2\s*ตัวล่าง\s*:\s*(\d{2})/g;
+    let m;
+    while((m=bre.exec(text))){
+      let nm=m[1].trim(); const key=TYPES[nm.toLowerCase()==='vip'?'vip':nm]; if(!key) continue;
+      let dd=null; for(const x of dmarks){ if(x[0]<=m.index) dd=x; else break; } if(!dd) dd=dmarks[0]; if(!dd) continue;
+      let y=dd[3]<100?dd[3]+2500:dd[3]; const ce=y-543; const ts=Date.UTC(ce,dd[2]-1,dd[1]);
+      const k=key+'|'+this.ymd(ts); if(seen[k]) continue; seen[k]=1;
+      out[key].push({ ts, top:+m[2], bottom:+m[3] });
     }
     return out;
   },
@@ -176,22 +209,24 @@ const App = {
   async update(){
     if(this.updating) return;
     this._ensure();
+    const id=this.state.lottery;
     this.updating=true; this.updateStatus=''; this.updateOk=null; render();
     try{
-      const html=await this.fetchProxied(this.sourceUrl());
-      const list=this.parse(html);
-      if(list.length){
-        this.mergeReal(list);
-        this.lastUpdated=Date.now(); this.saveReal();
-        this.updateOk=true;
-        this.updateStatus='ดึงสำเร็จ • ผลล่าสุด '+list.length+' งวด (ข้อมูลทั้งหมด '+this.draws().length+' งวด)';
-      }else{
-        this.updateOk=false;
-        this.updateStatus='เชื่อมต่อได้ แต่ยังอ่านผลไม่ได้ (เว็บต้นทางอาจเปลี่ยนรูปแบบ) — ลองใหม่อีกครั้ง';
+      if(id==='lao'){
+        const list=this.parseLao(await this.fetchProxied(this.laoUrl()));
+        if(list.length){ this.mergeReal(list,'lao'); this.lastUpd.lao=Date.now(); this.saveReal(); this.updateOk=true;
+          this.updateStatus='ดึงสำเร็จ • ผลล่าสุด '+list.length+' งวด (ข้อมูลทั้งหมด '+this.draws('lao').length+' งวด)'; }
+        else { this.updateOk=false; this.updateStatus='เชื่อมต่อได้ แต่ยังอ่านผลไม่ได้ — ลองใหม่อีกครั้ง'; }
+      } else {
+        const all=this.parseHanoi(await this.fetchProxied(this.hanoiUrl()));
+        for(const k of this.HANOI_KEYS){ if(all[k]&&all[k].length){ this.mergeReal(all[k],k); this.lastUpd[k]=Date.now(); } }
+        const n=(all[id]||[]).length;
+        if(n){ this.saveReal(); this.updateOk=true;
+          this.updateStatus='ดึงสำเร็จ • อัปเดตฮานอยทุกประเภท (ล่าสุด '+n+' งวด, รวม '+this.draws(id).length+' งวด)'; }
+        else { this.updateOk=false; this.updateStatus='เชื่อมต่อได้ แต่ยังอ่านผลไม่ได้ — ลองใหม่อีกครั้ง'; }
       }
     }catch(e){
-      this.updateOk=false;
-      this.updateStatus='ดึงไม่สำเร็จ — เน็ต/พร็อกซีอาจไม่ว่าง ลองกดใหม่อีกครั้งสักครู่';
+      this.updateOk=false; this.updateStatus='ดึงไม่สำเร็จ — เน็ต/พร็อกซีอาจไม่ว่าง ลองกดใหม่อีกครั้งสักครู่';
     }
     this.updating=false; render();
   },
@@ -207,7 +242,7 @@ function render(){
   const size = A.state.size||A.state.windowSize, side = A.state.side;
   const todayISO = new Date().toISOString().slice(0,10);
   const TOP_HUE = 345, BOT_HUE = 82;  // บน = ชมพู, ล่าง = เหลืองทอง (เลิกใช้เขียวมิ้น)
-  const l = A.LAO, c = C(l.hue), cT = C(TOP_HUE), c2 = C(BOT_HUE); // c = ม่วง (สีหลัก), cT = บน, c2 = ล่าง
+  const l = A.lot(), c = C(A.HUE), cT = C(TOP_HUE), c2 = C(BOT_HUE); // c = ม่วง (สีหลัก), cT = บน, c2 = ล่าง
   const bg='linear-gradient(160deg,#ECEDFB 0%,#F1EBFB 50%,#FBEDF6 100%)';
   const brandBg=`linear-gradient(135deg, ${C(278).accent}, ${C(330).accent})`;
   /* gradient ไล่เฉดสำหรับการ์ดสีสด */
@@ -224,7 +259,7 @@ function render(){
     el('div',{style:{width:'40px',height:'40px',borderRadius:'13px',display:'grid',placeItems:'center',fontSize:'19px',color:'#fff',background:brandBg,boxShadow:'0 6px 16px rgba(120,90,220,.26)'}},'✦'),
     el('div',{},[
       el('div',{style:{fontWeight:'600',fontSize:'17px',lineHeight:'1.05'}},'เลขดี'),
-      el('div',{style:{fontSize:'11px',color:'#9b94ad',letterSpacing:'.03em'}},'วิเคราะห์หวยลาวจากสถิติ'),
+      el('div',{style:{fontSize:'11px',color:'#9b94ad',letterSpacing:'.03em'}},'วิเคราะห์หวยลาว/ฮานอยจากสถิติ'),
     ]),
   ]);
   const updBtn = el('button',{style:{display:'inline-flex',alignItems:'center',gap:'7px',padding:'9px 17px',borderRadius:'999px',border:'none',cursor:A.updating?'default':'pointer',fontWeight:'600',fontSize:'13px',background:A.updating?'#cfc7e0':c.deep,color:'#fff',opacity:A.updating?'.85':'1',transition:'all .15s'},
@@ -232,15 +267,23 @@ function render(){
       el('span',{style:A.updating?{display:'inline-block',animation:'spin .8s linear infinite'}:{}},'⟳'),
       el('span',{},A.updating?'กำลังดึงผล…':'อัปเดตผลจริง'),
   ]);
-  wrap.appendChild(el('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'14px',flexWrap:'wrap',marginBottom:'8px'}},[brand,updBtn]));
+  wrap.appendChild(el('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'14px',flexWrap:'wrap',marginBottom:'10px'}},[brand,updBtn]));
+
+  /* ---------- เลือกหวย ---------- */
+  wrap.appendChild(el('div',{class:'hscroll',style:{display:'flex',gap:'8px',overflowX:'auto',marginBottom:'12px',paddingBottom:'3px'}},
+    A.LOTTERIES.map(L=>{ const active=A.state.lottery===L.id;
+      return el('button',{style:{padding:'8px 16px',borderRadius:'999px',fontWeight:'600',fontSize:'13px',cursor:'pointer',whiteSpace:'nowrap',
+        border:'1px solid '+(active?c.deep:'rgba(40,30,60,.12)'),background:active?c.deep:'#fff',color:active?'#fff':'#6c6680',transition:'all .15s'},
+        onClick:()=>A.selectLottery(L.id)}, L.name);
+    })));
 
   /* ---------- status line ---------- */
   let statusText, statusColor='#9b94ad';
   if(A.updating){ statusText='กำลังเชื่อมต่อเว็บผลหวย… (ปกติ 2–8 วินาที)'; }
   else if(A.updateStatus){ statusText=A.updateStatus; statusColor=A.updateOk?'#1f7a4d':'#c0563f'; }
-  else if(A.lastUpdated){ const u=new Date(A.lastUpdated); statusText='อัปเดตล่าสุด '+A.thai(A.lastUpdated)+' '+A.pad(u.getHours())+':'+A.pad(u.getMinutes())+' น. • กด “อัปเดตผลจริง” เพื่อดึงงวดใหม่'; statusColor='#1f7a4d'; }
+  else if(A.lastUpd && A.lastUpd[A.state.lottery]){ const t=A.lastUpd[A.state.lottery], u=new Date(t); statusText='อัปเดตล่าสุด '+A.thai(t)+' '+A.pad(u.getHours())+':'+A.pad(u.getMinutes())+' น. • กด “อัปเดตผลจริง” เพื่อดึงงวดใหม่'; statusColor='#1f7a4d'; }
   else if(A.isReal()){ const a=A.draws(); statusText='มีข้อมูลจริงในตัว '+a.length+' งวด (ถึง '+A.thai(a[a.length-1].ts)+') • กด “อัปเดตผลจริง” เพื่อดึงงวดใหม่'; statusColor='#1f7a4d'; }
-  else statusText='ยังไม่ได้ดึงข้อมูลจริง — กำลังแสดงข้อมูลตัวอย่าง (กด “อัปเดตผลจริง” เพื่อดึงผลหวยลาวจริง)';
+  else statusText='ยังไม่ได้ดึงข้อมูลจริง — กำลังแสดงข้อมูลตัวอย่าง (กด “อัปเดตผลจริง” เพื่อดึงผลจริง)';
   wrap.appendChild(el('div',{style:{fontSize:'12px',color:statusColor,margin:'0 0 14px',lineHeight:'1.5'}},statusText));
 
   /* ---------- tabs (สลับหน้า) ---------- */

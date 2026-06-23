@@ -385,8 +385,7 @@ function render(){
   /* ====================== หน้าสถิติเลข 00–99 ====================== */
   if(A.state.view==='table'){
     const tbl = el('div',{style:{animation:'pop .35s ease both'}});
-    tbl.appendChild(el('div',{style:{position:'relative',overflow:'hidden',background:heroGrad,borderRadius:'26px',padding:'22px 24px',marginBottom:'18px',boxShadow:'0 12px 30px '+c.soft,border:'1px solid '+c.accent}},[
-      el('div',{style:{position:'absolute',right:'-30px',top:'-30px',width:'150px',height:'150px',borderRadius:'50%',background:`oklch(0.91 0.06 ${l.hue})`,opacity:'.6'}}),
+    tbl.appendChild(el('div',{style:{position:'relative',overflow:'hidden',background:heroGrad,borderRadius:'26px',padding:'22px 24px',marginBottom:'18px',boxShadow:'0 8px 22px rgba(70,50,110,.06)',border:'1px solid '+c.accent}},[
       el('div',{style:{position:'relative'}},[
         el('div',{style:{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}},[
           el('span',{style:{fontWeight:'700',fontSize:'14px',padding:'6px 15px',borderRadius:'999px',background:'#fff',color:c.deep}},l.name),
@@ -442,14 +441,12 @@ function render(){
   const detail = el('div',{style:{animation:'pop .35s ease both'}});
 
   /* header — gradient hero */
-  const frost=(label,val,fc)=>el('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',padding:'10px 20px',borderRadius:'18px',background:'#fff',boxShadow:'0 6px 16px '+fc.soft}},[
+  const frost=(label,val,fc)=>el('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',padding:'10px 20px',borderRadius:'18px',background:'#fff',boxShadow:'0 4px 12px rgba(70,50,110,.07)'}},[
     el('span',{style:{fontSize:'10px',color:sub}},label),
     el('span',{style:{fontWeight:'700',fontSize:'24px',color:fc.deep}},val),
   ]);
   const heroBadge=(txt)=>el('span',{style:{fontSize:'11px',fontWeight:'700',padding:'3px 10px',borderRadius:'999px',background:'rgba(255,255,255,.7)',color:c.deep}},txt);
-  detail.appendChild(el('div',{style:{position:'relative',overflow:'hidden',background:heroGrad,borderRadius:'26px',padding:'22px 24px',marginBottom:'18px',boxShadow:'0 12px 30px '+c.soft,border:'1px solid '+c.accent}},[
-    el('div',{style:{position:'absolute',right:'-30px',top:'-30px',width:'150px',height:'150px',borderRadius:'50%',background:`oklch(0.91 0.06 ${l.hue})`,opacity:'.6'}}),
-    el('div',{style:{position:'absolute',right:'58px',bottom:'-44px',width:'96px',height:'96px',borderRadius:'50%',background:`oklch(0.93 0.05 ${l.hue+34})`,opacity:'.6'}}),
+  detail.appendChild(el('div',{style:{position:'relative',overflow:'hidden',background:heroGrad,borderRadius:'26px',padding:'22px 24px',marginBottom:'18px',boxShadow:'0 8px 22px rgba(70,50,110,.06)',border:'1px solid '+c.accent}},[
     el('div',{style:{position:'relative',display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:'16px',flexWrap:'wrap'}},[
       el('div',{},[
         el('div',{style:{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}},[
@@ -489,28 +486,26 @@ function render(){
   /* size comparison cards */
   detail.appendChild(el('div',{style:{fontSize:'13px',color:'#9b94ad',marginBottom:'9px'}},'เทียบขนาดชุด — ยิ่งซื้อกว้าง โอกาสยิ่งสูง แต่ต้นทุนมากขึ้น (กดเพื่อเลือก)'));
   const sizeCardGrid = el('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:'12px',marginBottom:'22px'}});
-  // พาสเทล: ไล่เฉดอ่อน + ตัวอักษรสีเข้มของโทนนั้น
-  const pastelGrad=(h)=>`linear-gradient(135deg, oklch(0.925 0.08 ${h}) 0%, oklch(0.88 0.105 ${h+18}) 100%)`;
-  const sizeHue={40:300, 30:40, 20:128}; // ลาเวนเดอร์ / โคออรล / ไลม์ (แคนดี้ ไม่มีมินต์)
+  // พาสเทลสีธีมของหน้านั้น (ทั้ง 3 ใบสีเดียวกัน อันที่เลือกมีกรอบ)
+  const sizeBg=`linear-gradient(135deg, oklch(0.945 0.055 ${l.hue}) 0%, oklch(0.91 0.08 ${l.hue+16}) 100%)`;
+  const sizeSub=`oklch(0.62 0.10 ${l.hue})`;
   [40,30,20].forEach(w=>{
     const a=A.cov(pt,total,w), b=A.cov(pb,total,w); const active=w===size;
-    const h=sizeHue[w], ink=`oklch(0.50 0.155 ${h})`, sub=`oklch(0.60 0.10 ${h})`;
-    sizeCardGrid.appendChild(el('div',{style:{background:pastelGrad(h),borderRadius:'20px',padding:'15px 16px',cursor:'pointer',color:ink,position:'relative',overflow:'hidden',transition:'all .15s',
-      boxShadow:active?('0 12px 26px oklch(0.7 0.12 '+h+' / .45)'):'0 5px 14px rgba(60,40,100,.08)',
-      border:active?('2px solid oklch(0.66 0.14 '+h+')'):'2px solid transparent', transform:active?'translateY(-2px)':'none'},
+    sizeCardGrid.appendChild(el('div',{style:{background:sizeBg,borderRadius:'20px',padding:'15px 16px',cursor:'pointer',color:c.deep,position:'relative',overflow:'hidden',transition:'all .15s',
+      boxShadow:active?('0 10px 22px '+c.soft):'0 4px 12px rgba(60,40,100,.06)',
+      border:active?('2px solid '+c.accent):'2px solid transparent', transform:active?'translateY(-2px)':'none'},
       onClick:()=>A.setState({windowSize:w})},[
-      el('div',{style:{position:'absolute',right:'-20px',top:'-20px',width:'74px',height:'74px',borderRadius:'50%',background:'rgba(255,255,255,.35)'}}),
       el('div',{style:{position:'relative',display:'flex',justifyContent:'space-between',alignItems:'center'}},[
         el('span',{style:{fontWeight:'700',fontSize:'18px'}},w+' ตัว'),
-        el('span',{style:{fontSize:'11px',fontWeight:'600',padding:'3px 10px',borderRadius:'999px',background:'rgba(255,255,255,.6)',color:ink}},w===40?'กว้างสุด':w===30?'สมดุล':'ประหยัด'),
+        el('span',{style:{fontSize:'11px',fontWeight:'600',padding:'3px 10px',borderRadius:'999px',background:'rgba(255,255,255,.7)',color:c.deep}},w===40?'กว้างสุด':w===30?'สมดุล':'ประหยัด'),
       ]),
       el('div',{style:{position:'relative',display:'flex',gap:'12px',marginTop:'12px'}},[
         el('div',{style:{flex:'1'}},[
-          el('div',{style:{fontSize:'11px',color:sub}},'บน '+A.lab(a.best.s,w)),
+          el('div',{style:{fontSize:'11px',color:sizeSub}},'บน '+A.lab(a.best.s,w)),
           el('div',{style:{fontWeight:'700',fontSize:'22px'}},A.pl(a.best.p)),
         ]),
         el('div',{style:{flex:'1'}},[
-          el('div',{style:{fontSize:'11px',color:sub}},'ล่าง '+A.lab(b.best.s,w)),
+          el('div',{style:{fontSize:'11px',color:sizeSub}},'ล่าง '+A.lab(b.best.s,w)),
           el('div',{style:{fontWeight:'700',fontSize:'22px'}},A.pl(b.best.p)),
         ]),
       ]),

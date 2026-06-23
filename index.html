@@ -68,11 +68,11 @@ const App = {
 
   /* หวยที่รองรับ (ลาว + ฮานอย 4 ประเภท) */
   LOTTERIES: [
-    { id:'lao',          name:'หวยลาว',        hue:168 }, // เขียวมินต์-เทอควอยซ์
-    { id:'hanoi',        name:'ฮานอย',         hue:255 }, // น้ำเงิน-คราม
-    { id:'hanoiSpecial', name:'ฮานอยพิเศษ',    hue:300 }, // ม่วง
-    { id:'hanoiVip',     name:'ฮานอย VIP',     hue:28  }, // ส้ม-โคออรล
-    { id:'hanoiTask',    name:'ฮานอยเฉพาะกิจ', hue:200 }, // ฟ้า-cyan
+    { id:'lao',          name:'หวยลาว',        hue:235 }, // ฟ้าสกาย
+    { id:'hanoi',        name:'ฮานอย',         hue:300 }, // ลาเวนเดอร์-ม่วง
+    { id:'hanoiSpecial', name:'ฮานอยพิเศษ',    hue:350 }, // ชมพูแคนดี้
+    { id:'hanoiVip',     name:'ฮานอย VIP',     hue:40  }, // โคออรล-พีช
+    { id:'hanoiTask',    name:'ฮานอยเฉพาะกิจ', hue:128 }, // เขียวไลม์ (ไม่ใช่มินต์)
   ],
   HANOI_KEYS: ['hanoi','hanoiSpecial','hanoiVip','hanoiTask'],
   lot(){ return this.LOTTERIES.find(x=>x.id===this.state.lottery) || this.LOTTERIES[0]; },
@@ -140,11 +140,11 @@ const App = {
   pl(p){ return Math.round(p*100)+'%'; },
   conf(p){ return p>=0.6?'มั่นใจสูงมาก':p>=0.5?'มั่นใจสูง':p>=0.42?'ปานกลาง':'พอใช้'; },
   colorFor(hue){
-    // พาสเทลแท้: soft=พื้นอ่อนมาก, accent=พาสเทลกลาง (พื้น active), deep=โทนเข้มนุ่ม (ตัวอักษร/ตัวเลข อ่านง่าย)
+    // แคนดี้พาสเทล: อ่อนแต่สีชัด สดใส (ไม่ซีด) — soft=พื้นอ่อน, accent=สีแคนดี้ (พื้น active/แถบ), deep=ตัวอักษร/ตัวเลข
     return {
-      soft:`oklch(0.965 0.032 ${hue})`,
-      accent:`oklch(0.86 0.075 ${hue})`,
-      deep:`oklch(0.52 0.115 ${hue})`,
+      soft:`oklch(0.95 0.065 ${hue})`,
+      accent:`oklch(0.82 0.135 ${hue})`,
+      deep:`oklch(0.55 0.16 ${hue})`,
       hue
     };
   },
@@ -245,12 +245,12 @@ function render(){
   const C = (h)=>A.colorFor(h);
   const size = A.state.size||A.state.windowSize, side = A.state.side;
   const todayISO = new Date().toISOString().slice(0,10);
-  const TOP_HUE = 345, BOT_HUE = 82;  // บน = ชมพู, ล่าง = เหลืองทอง (เลิกใช้เขียวมิ้น)
+  const TOP_HUE = 350, BOT_HUE = 88;  // บน = ชมพูแคนดี้, ล่าง = เหลืองทอง (ไม่มีมินต์)
   const l = A.lot(), c = C(l.hue), cT = C(TOP_HUE), c2 = C(BOT_HUE); // c = สีประจำหวย, cT = บน(ชมพู), c2 = ล่าง(เหลือง)
   const ink='#3c3650', sub='#8a85a0';        // ตัวอักษรหลัก/รอง (นุ่ม)
-  const bg=`linear-gradient(165deg, oklch(0.99 0.01 ${l.hue}) 0%, oklch(0.975 0.022 ${l.hue+45}) 100%)`; // พื้นหลังขาวนวล แต้มสีจางๆ
+  const bg=`linear-gradient(165deg, oklch(0.98 0.022 ${l.hue}) 0%, oklch(0.965 0.04 ${l.hue+45}) 100%)`; // พื้นหลังขาวนวล แต้มสีแคนดี้จางๆ
   const brandBg=`linear-gradient(135deg, oklch(0.82 0.10 ${l.hue}), oklch(0.76 0.11 ${l.hue+34}))`;
-  const heroGrad=`linear-gradient(140deg, oklch(0.955 0.045 ${l.hue}) 0%, oklch(0.93 0.06 ${l.hue+34}) 100%)`; // hero พาสเทลอ่อน (ตัวอักษรเข้ม)
+  const heroGrad=`linear-gradient(140deg, oklch(0.91 0.10 ${l.hue}) 0%, oklch(0.87 0.12 ${l.hue+30}) 100%)`; // hero แคนดี้พาสเทล (ตัวอักษรเข้ม)
 
   const root = document.getElementById('root');
   root.innerHTML='';
@@ -490,11 +490,11 @@ function render(){
   detail.appendChild(el('div',{style:{fontSize:'13px',color:'#9b94ad',marginBottom:'9px'}},'เทียบขนาดชุด — ยิ่งซื้อกว้าง โอกาสยิ่งสูง แต่ต้นทุนมากขึ้น (กดเพื่อเลือก)'));
   const sizeCardGrid = el('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:'12px',marginBottom:'22px'}});
   // พาสเทล: ไล่เฉดอ่อน + ตัวอักษรสีเข้มของโทนนั้น
-  const pastelGrad=(h)=>`linear-gradient(135deg, oklch(0.955 0.04 ${h}) 0%, oklch(0.915 0.062 ${h+18}) 100%)`;
-  const sizeHue={40:250, 30:338, 20:148}; // ฟ้า / ชมพู / เขียว (พาสเทล)
+  const pastelGrad=(h)=>`linear-gradient(135deg, oklch(0.925 0.08 ${h}) 0%, oklch(0.88 0.105 ${h+18}) 100%)`;
+  const sizeHue={40:300, 30:40, 20:128}; // ลาเวนเดอร์ / โคออรล / ไลม์ (แคนดี้ ไม่มีมินต์)
   [40,30,20].forEach(w=>{
     const a=A.cov(pt,total,w), b=A.cov(pb,total,w); const active=w===size;
-    const h=sizeHue[w], ink=`oklch(0.48 0.125 ${h})`, sub=`oklch(0.58 0.085 ${h})`;
+    const h=sizeHue[w], ink=`oklch(0.50 0.155 ${h})`, sub=`oklch(0.60 0.10 ${h})`;
     sizeCardGrid.appendChild(el('div',{style:{background:pastelGrad(h),borderRadius:'20px',padding:'15px 16px',cursor:'pointer',color:ink,position:'relative',overflow:'hidden',transition:'all .15s',
       boxShadow:active?('0 12px 26px oklch(0.7 0.12 '+h+' / .45)'):'0 5px 14px rgba(60,40,100,.08)',
       border:active?('2px solid oklch(0.66 0.14 '+h+')'):'2px solid transparent', transform:active?'translateY(-2px)':'none'},

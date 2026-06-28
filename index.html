@@ -150,12 +150,37 @@ const App = {
     };
   },
   dataRange(){ const a=this.draws(); return a.length ? {min:new Date(a[0].ts), max:new Date(a[a.length-1].ts)} : {min:new Date(2025,0,1), max:new Date()}; },
+  _iso(d){ const z=new Date(d.getTime()-d.getTimezoneOffset()*60000); return z.toISOString().slice(0,10); },
   applyPreset(k){
     const {min,max}=this.dataRange(); let start;
     if(k==='all') start=min;
     else { const days=k==='6m'?180:k==='3m'?90:30; start=new Date(max.getTime()-days*86400000); if(start<min) start=min; }
-    const iso=d=>{ const z=new Date(d.getTime()-d.getTimezoneOffset()*60000); return z.toISOString().slice(0,10); };
-    this.setState({ preset:k, dateFrom:iso(start), dateTo:iso(max) });
+    this.setState({ preset:k, dateFrom:this._iso(start), dateTo:this._iso(max) });
+  },
+  yearsInData(){ const {min,max}=this.dataRange(); const out=[]; for(let y=min.getFullYear(); y<=max.getFullYear(); y++) out.push(y); return out; },
+  applyYear(ceYear){
+    const {min,max}=this.dataRange();
+    let start=new Date(ceYear,0,1), end=new Date(ceYear,11,31,23,59,59);
+    if(start<min) start=min; if(end>max) end=max;
+    this.setState({ preset:'year:'+ceYear, dateFrom:this._iso(start), dateTo:this._iso(end) });
+  },
+  clearFilters(){ this.state.windowSize=30; this.applyPreset('all'); },
+
+  /* ---- backtest: ทำนายแต่ละงวดจากข้อมูลก่อนหน้า แล้วเทียบผลจริง ---- */
+  backtest(size, fromTs, toTs){
+    const all=this.draws(); const rows=[]; let hitT=0,hitB=0,nT=0,nB=0;
+    const ct=new Array(100).fill(0), cb=new Array(100).fill(0);
+    for(let i=0;i<all.length;i++){
+      const d=all[i];
+      if(i>=20 && d.ts>=fromTs && d.ts<toTs){
+        const aT=this.cov(this.pre(ct),i,size).best, aB=this.cov(this.pre(cb),i,size).best;
+        const okT=d.top>=aT.s && d.top<aT.s+size, okB=d.bottom>=aB.s && d.bottom<aB.s+size;
+        rows.push({ ts:d.ts, pTop:[aT.s,aT.s+size-1], aTop:d.top, okT, pBot:[aB.s,aB.s+size-1], aBot:d.bottom, okB });
+        nT++; if(okT)hitT++; nB++; if(okB)hitB++;
+      }
+      ct[d.top]++; cb[d.bottom]++;
+    }
+    return { rows, accT:nT?hitT/nT:0, accB:nB?hitB/nB:0, hitT, hitB, nT, nB };
   },
 
   /* ---- live update: ยิงหลาย proxy พร้อมกัน เอาอันที่เร็วสุดที่สำเร็จ ---- */
@@ -296,7 +321,7 @@ function render(){
     border:'1px solid '+(on?c.deep:'rgba(40,30,60,.10)'),background:on?c.deep:'#fff',color:on?'#fff':'#6c6680',transition:'all .15s'},
     onClick:()=>A.setState({view:v, openCal:null})},label); };
   wrap.appendChild(el('div',{style:{display:'flex',gap:'8px',marginBottom:'16px',flexWrap:'wrap'}},[
-    tabBtn('analyze','วิเคราะห์ช่วงเลข'), tabBtn('table','สถิติเลข 00–99'),
+    tabBtn('analyze','วิเคราะห์ช่วงเลข'), tabBtn('table','สถิติเลข 00–99'), tabBtn('backtest','ทำนาย vs ผลจริง'),
   ]));
 
   /* ---------- data badge ---------- */
@@ -319,6 +344,10 @@ function render(){
   /* ---- shared: filter helpers + date picker (ใช้ทั้ง 2 หน้า) ---- */
   const presetBtns=[['all','ทั้งหมด'],['6m','6 เดือน'],['3m','3 เดือน'],['1m','30 วัน']].map(([k,label])=>
     el('button',{style:segStyle(A.state.preset===k,c),onClick:()=>A.applyPreset(k)},label));
+  const yearBtns=A.yearsInData().map(y=>
+    el('button',{style:segStyle(A.state.preset==='year:'+y,c),onClick:()=>A.applyYear(y)}, (y+543)));
+  const clearBtn=el('button',{style:{padding:'7px 14px',borderRadius:'999px',fontSize:'13px',fontWeight:'600',cursor:'pointer',border:'1px solid rgba(40,30,60,.14)',background:'#fff',color:'#8a8499',transition:'all .15s'},
+    onClick:()=>A.clearFilters()},'✕ ล้างตัวกรอง');
   const sizeTabBtns=[40,30,20].map(w=>
     el('button',{style:segStyle(w===size,c),onClick:()=>A.setState({windowSize:w})},w+' ตัว'));
   const MIN_ISO='2025-01-01', MAX_ISO=todayISO;
@@ -373,6 +402,10 @@ function render(){
       el('label',{style:{fontSize:'12px',color:'#9b94ad',marginBottom:'7px',display:'block',fontWeight:'600'}},'ช่วงวันที่'),
       el('div',{style:{display:'flex',gap:'6px',flexWrap:'wrap'}},presetBtns),
     ]),
+    yearBtns.length>1 ? el('div',{},[
+      el('label',{style:{fontSize:'12px',color:'#9b94ad',marginBottom:'7px',display:'block',fontWeight:'600'}},'เลือกปี (พ.ศ.)'),
+      el('div',{style:{display:'flex',gap:'6px',flexWrap:'wrap'}},yearBtns),
+    ]) : null,
     el('div',{style:{display:'flex',gap:'8px',alignItems:'flex-end'}},[
       el('div',{},[ el('label',{style:{fontSize:'12px',color:'#9b94ad',marginBottom:'7px',display:'block',fontWeight:'600'}},'ตั้งแต่'), dateField('from', A.state.dateFrom) ]),
       el('div',{},[ el('label',{style:{fontSize:'12px',color:'#9b94ad',marginBottom:'7px',display:'block',fontWeight:'600'}},'ถึง'), dateField('to', A.state.dateTo) ]),
@@ -381,6 +414,7 @@ function render(){
       el('label',{style:{fontSize:'12px',color:'#9b94ad',marginBottom:'7px',display:'block',fontWeight:'600'}},'ขนาดชุดเลข (ตัวติดกัน)'),
       el('div',{style:{display:'flex',gap:'6px'}},sizeTabBtns),
     ]) : null,
+    el('div',{},[ el('label',{style:{fontSize:'12px',color:'transparent',marginBottom:'7px',display:'block',fontWeight:'600'}},'.'), clearBtn ]),
   ]);
 
   /* ---- header เรียบ (ตามดีไซน์): pill + badge + หัวข้อ + กล่องผลล่าสุด ---- */
@@ -444,6 +478,69 @@ function render(){
       el('span',{},'% คือสัดส่วนที่เลขนั้นออกในตำแหน่งบน/ล่าง จากจำนวนงวดทั้งหมดในช่วงที่เลือก (ผลรวมทุกเลขในแต่ละฝั่ง = 100%) • สถิติในอดีตไม่รับประกันผลในอนาคต'),
     ]));
     wrap.appendChild(tbl);
+    return;
+  }
+
+  /* ====================== หน้า ทำนาย vs ผลจริง (backtest) ====================== */
+  if(A.state.view==='backtest'){
+    const bt = el('div',{style:{animation:'pop .35s ease both'}});
+    bt.appendChild(pageHeader('ทำนาย vs ผลจริง','จำลองว่า ถ้าทำนายแต่ละงวดจากสถิติก่อนหน้า (ชุด '+size+' ตัว) จะทายถูกกี่ % • '+A.thai(fa)+' – '+A.thai(Date.parse(A.state.dateTo))));
+
+    /* ตัวเลือกประเภทหวยในหน้านี้ */
+    bt.appendChild(el('div',{style:{marginBottom:'14px'}},[
+      el('label',{style:{fontSize:'12px',color:'#9b94ad',marginBottom:'7px',display:'block',fontWeight:'600'}},'เลือกประเภทหวย'),
+      el('div',{class:'hscroll',style:{display:'flex',gap:'8px',overflowX:'auto',paddingBottom:'3px'}},
+        A.LOTTERIES.map(L=>{ const on=A.state.lottery===L.id, lc=C(L.hue);
+          return el('button',{style:{padding:'8px 16px',borderRadius:'999px',fontWeight:'600',fontSize:'13px',cursor:'pointer',whiteSpace:'nowrap',border:'1px solid '+(on?lc.deep:'rgba(40,30,60,.12)'),background:on?lc.deep:'#fff',color:on?'#fff':'#6c6680',transition:'all .15s'},onClick:()=>A.selectLottery(L.id)},L.name);
+        })),
+    ]));
+    bt.appendChild(filterBar(true));
+
+    const bres=A.backtest(size, fa, fb);
+    const sumCard=(label,acc,hit,n,cc)=>el('div',{style:{background:'#fff',borderRadius:'22px',padding:'20px',boxShadow:'0 12px 32px rgba(60,40,100,.06)',border:'1px solid rgba(40,30,60,.05)',flex:'1',minWidth:'220px'}},[
+      el('span',{style:{fontWeight:'600',fontSize:'13px',padding:'5px 13px',borderRadius:'999px',background:cc.soft,color:cc.deep}},label),
+      el('div',{style:{display:'flex',alignItems:'baseline',gap:'10px',margin:'14px 0 2px'}},[
+        el('span',{style:{fontWeight:'600',fontSize:'42px',lineHeight:'1',color:cc.deep}},(n?Math.round(acc*100):0)+'%'),
+        el('span',{style:{fontSize:'13px',color:'#9b94ad'}},'ทายถูก'),
+      ]),
+      el('div',{style:{fontSize:'14px',color:'#7c7690'}},'ถูก '+hit+' จาก '+n+' งวด (ชุด '+size+' ตัว)'),
+    ]);
+    bt.appendChild(el('div',{style:{display:'flex',gap:'16px',flexWrap:'wrap',marginBottom:'18px'}},[
+      sumCard('2 ตัวบน',bres.accT,bres.hitT,bres.nT,cT), sumCard('2 ตัวล่าง',bres.accB,bres.hitB,bres.nB,c2),
+    ]));
+
+    if(bres.rows.length){
+      const hitBadge=(ok)=>el('span',{style:{fontSize:'11px',fontWeight:'700',padding:'2px 8px',borderRadius:'999px',background:ok?'#e7f6ee':'#fcebe9',color:ok?'#1f7a4d':'#c0563f'}}, ok?'✓ ถูก':'✗ ผิด');
+      const cell=(pr,actual,ok,cc)=>el('div',{style:{display:'flex',alignItems:'center',gap:'7px',flexWrap:'wrap'}},[
+        el('span',{style:{fontSize:'12px',color:'#9b94ad'}},'ทาย'),
+        el('span',{style:{fontWeight:'600',fontSize:'13px',padding:'2px 8px',borderRadius:'8px',background:cc.soft,color:cc.deep}},A.pad(pr[0])+'–'+A.pad(pr[1])),
+        el('span',{style:{fontSize:'12px',color:'#9b94ad'}},'→ ออก'),
+        el('span',{style:{fontWeight:'700',fontSize:'15px',color:'#2c2740'}},A.pad(actual)),
+        hitBadge(ok),
+      ]);
+      const rows=el('div',{style:{display:'flex',flexDirection:'column'}});
+      rows.appendChild(el('div',{class:'an-grid',style:{display:'grid',gridTemplateColumns:'88px 1fr 1fr',gap:'12px',padding:'0 2px 8px',borderBottom:'2px solid rgba(40,30,60,.08)'}},[
+        el('div',{style:{fontSize:'11px',color:'#9b94ad',fontWeight:'600'}},'งวด'),
+        el('div',{style:{fontSize:'11px',color:'#9b94ad',fontWeight:'600'}},'2 ตัวบน'),
+        el('div',{style:{fontSize:'11px',color:'#9b94ad',fontWeight:'600'}},'2 ตัวล่าง'),
+      ]));
+      bres.rows.slice().reverse().forEach(r=>{
+        rows.appendChild(el('div',{class:'an-grid',style:{display:'grid',gridTemplateColumns:'88px 1fr 1fr',gap:'12px',alignItems:'center',padding:'9px 2px',borderBottom:'1px solid rgba(40,30,60,.05)'}},[
+          el('div',{style:{fontSize:'13px',fontWeight:'600',color:'#2c2740'}},A.short(r.ts)),
+          cell(r.pTop,r.aTop,r.okT,cT), cell(r.pBot,r.aBot,r.okB,c2),
+        ]));
+      });
+      bt.appendChild(el('div',{style:{background:'#fff',borderRadius:'24px',padding:'18px',boxShadow:'0 12px 32px rgba(60,40,100,.06)',border:'1px solid rgba(40,30,60,.05)'}},[rows]));
+    } else {
+      bt.appendChild(el('div',{style:{background:'#fff',borderRadius:'24px',padding:'30px',textAlign:'center',color:'#9b94ad',boxShadow:'0 12px 32px rgba(60,40,100,.06)'}},'งวดในช่วงนี้น้อยเกินไป (ต้องมีงวดก่อนหน้าอย่างน้อย 20 งวดถึงจะทำนายได้) — ลองขยายช่วงวันที่/เลือก “ทั้งหมด”'));
+    }
+
+    bt.appendChild(el('div',{style:{display:'flex',gap:'10px',alignItems:'flex-start',background:'rgba(255,255,255,.55)',border:'1px dashed rgba(40,30,60,.14)',borderRadius:'16px',padding:'14px 16px',fontSize:'12px',color:'#8a8499',lineHeight:'1.6',marginTop:'18px'}},[
+      el('span',{},'⚠️'),
+      el('span',{},'แต่ละงวดทำนายจากสถิติ “ก่อนหน้างวดนั้น” เท่านั้น (ไม่เห็นอนาคต) แล้วเทียบผลจริง — เป็นการทดสอบย้อนหลังว่ากลยุทธ์ “ช่วงเลขติดกัน” แม่นแค่ไหน • อดีตไม่รับประกันอนาคต'),
+    ]));
+
+    wrap.appendChild(bt);
     return;
   }
 

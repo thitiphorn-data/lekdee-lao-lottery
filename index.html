@@ -485,15 +485,6 @@ function render(){
   if(A.state.view==='backtest'){
     const bt = el('div',{style:{animation:'pop .35s ease both'}});
     bt.appendChild(pageHeader('ทำนาย vs ผลจริง','จำลองว่า ถ้าทำนายแต่ละงวดจากสถิติก่อนหน้า (ชุด '+size+' ตัว) จะทายถูกกี่ % • '+A.thai(fa)+' – '+A.thai(Date.parse(A.state.dateTo))));
-
-    /* ตัวเลือกประเภทหวยในหน้านี้ */
-    bt.appendChild(el('div',{style:{marginBottom:'14px'}},[
-      el('label',{style:{fontSize:'12px',color:'#9b94ad',marginBottom:'7px',display:'block',fontWeight:'600'}},'เลือกประเภทหวย'),
-      el('div',{class:'hscroll',style:{display:'flex',gap:'8px',overflowX:'auto',paddingBottom:'3px'}},
-        A.LOTTERIES.map(L=>{ const on=A.state.lottery===L.id, lc=C(L.hue);
-          return el('button',{style:{padding:'8px 16px',borderRadius:'999px',fontWeight:'600',fontSize:'13px',cursor:'pointer',whiteSpace:'nowrap',border:'1px solid '+(on?lc.deep:'rgba(40,30,60,.12)'),background:on?lc.deep:'#fff',color:on?'#fff':'#6c6680',transition:'all .15s'},onClick:()=>A.selectLottery(L.id)},L.name);
-        })),
-    ]));
     bt.appendChild(filterBar(true));
 
     const bres=A.backtest(size, fa, fb);

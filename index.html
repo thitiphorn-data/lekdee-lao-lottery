@@ -61,7 +61,7 @@ const App = {
     dateFrom:'2025-01-01', dateTo:new Date().toISOString().slice(0,10),
     preset:'all', side:'top',
     openCal:null, calMonth:0,  // custom dd/mm/yyyy date picker
-    view:'analyze',            // 'analyze' | 'table'
+    view:'home',               // 'home' | 'analyze' | 'table' | 'backtest'
     lottery:'lao'              // หวยที่เลือก
   },
   theme:'pastel',
@@ -298,14 +298,69 @@ function render(){
   ]);
   wrap.appendChild(el('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'14px',flexWrap:'wrap',marginBottom:'10px'}},[brand,updBtn]));
 
-  /* ---------- เลือกหวย ---------- */
-  wrap.appendChild(el('div',{class:'hscroll',style:{display:'flex',gap:'8px',overflowX:'auto',marginBottom:'12px',paddingBottom:'3px'}},
-    A.LOTTERIES.map(L=>{ const active=A.state.lottery===L.id;
-      const lc=C(L.hue);
-      return el('button',{style:{padding:'8px 16px',borderRadius:'999px',fontWeight:'600',fontSize:'13px',cursor:'pointer',whiteSpace:'nowrap',
-        border:'1px solid '+(active?lc.deep:'rgba(40,30,60,.12)'),background:active?lc.deep:'#fff',color:active?'#fff':'#6c6680',transition:'all .15s'},
-        onClick:()=>A.selectLottery(L.id)}, L.name);
-    })));
+  /* ---------- เมนู: หน้าแรก + เลือกหวย ---------- */
+  const onHome=A.state.view==='home';
+  const navPill=(label,active,col,onClick)=>el('button',{style:{padding:'8px 16px',borderRadius:'999px',fontWeight:'600',fontSize:'13px',cursor:'pointer',whiteSpace:'nowrap',
+    border:'1px solid '+(active?col:'rgba(40,30,60,.12)'),background:active?col:'#fff',color:active?'#fff':'#6c6680',transition:'all .15s'},onClick},label);
+  wrap.appendChild(el('div',{class:'hscroll',style:{display:'flex',gap:'8px',overflowX:'auto',marginBottom:'12px',paddingBottom:'3px'}},[
+    navPill('หน้าแรก', onHome, c.deep, ()=>A.setState({view:'home',openCal:null})),
+    ...A.LOTTERIES.map(L=>{ const active=!onHome && A.state.lottery===L.id; const lc=C(L.hue);
+      return navPill(L.name, active, lc.deep, ()=>{ if(A.state.view==='home') A.state.view='analyze'; A.selectLottery(L.id); });
+    }),
+  ]));
+
+  /* ---------- HOME: ผลล่าสุดของทุกหวย ---------- */
+  if(onHome){
+    const home=el('div',{style:{animation:'pop .35s ease both'}});
+    home.appendChild(el('div',{style:{margin:'8px 0 20px'}},[
+      el('div',{style:{fontSize:'12px',color:'#9b94ad',marginBottom:'6px'}},'วันนี้ '+A.thai(Date.now())),
+      el('h1',{style:{fontWeight:'600',fontSize:'30px',margin:'0 0 8px',lineHeight:'1.14',color:ink}},'ผลหวยล่าสุด & ชุดเลขแนะนำ'),
+      el('p',{style:{margin:'0',color:sub,fontSize:'15px',maxWidth:'600px'}},'ผลออกล่าสุดของหวยแต่ละประเภท พร้อมช่วงเลขแนะนำ 30 ตัว — กดการ์ดเพื่อดูวิเคราะห์เต็ม'),
+    ]));
+    const grid=el('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))',gap:'16px'}});
+    A.LOTTERIES.forEach(L=>{
+      const dr=A.draws(L.id); if(!dr.length) return;
+      const lc=C(L.hue), lc2=C(L.hue+16), last=dr[dr.length-1], tot=dr.length;
+      const a=A.cov(A.pre(A.cnt(dr,'top')),tot,30).best, b=A.cov(A.pre(A.cnt(dr,'bottom')),tot,30).best;
+      grid.appendChild(el('div',{style:{background:'#fff',borderRadius:'22px',padding:'18px',boxShadow:'0 12px 32px rgba(60,40,100,.06)',border:'1px solid rgba(40,30,60,.05)',display:'flex',flexDirection:'column',gap:'13px'}},[
+        el('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'8px'}},[
+          el('span',{style:{fontWeight:'600',fontSize:'13px',padding:'5px 13px',borderRadius:'999px',background:lc.soft,color:lc.deep}},L.name),
+          el('span',{style:{fontSize:'11px',color:'#a9a2b8'}},A.short(last.ts)),
+        ]),
+        el('div',{style:{display:'flex',gap:'10px'}},[
+          el('div',{style:{flex:'1',display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',padding:'12px',borderRadius:'16px',background:lc.soft}},[
+            el('span',{style:{fontSize:'10px',color:lc.deep,opacity:'.85'}},'ผลล่าสุด • บน'),
+            el('span',{style:{fontWeight:'600',fontSize:'30px',color:lc.deep}},A.pad(last.top)),
+          ]),
+          el('div',{style:{flex:'1',display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',padding:'12px',borderRadius:'16px',background:lc2.soft}},[
+            el('span',{style:{fontSize:'10px',color:lc2.deep,opacity:'.85'}},'ผลล่าสุด • ล่าง'),
+            el('span',{style:{fontWeight:'600',fontSize:'30px',color:lc2.deep}},A.pad(last.bottom)),
+          ]),
+        ]),
+        el('div',{style:{height:'1px',background:'rgba(40,30,60,.06)'}}),
+        el('div',{style:{fontSize:'11px',color:'#9b94ad'}},'แนะนำชุด 30 ตัวติดกัน • จาก '+tot.toLocaleString()+' งวด'),
+        el('div',{style:{display:'flex',gap:'8px'}},[
+          el('div',{style:{flex:'1',padding:'9px 12px',borderRadius:'14px',background:lc.soft,color:lc.deep}},[
+            el('div',{style:{fontSize:'11px',opacity:'.75'}},'บน '+A.lab(a.s,30)),
+            el('div',{style:{fontWeight:'600',fontSize:'19px'}},A.pl(a.p)),
+          ]),
+          el('div',{style:{flex:'1',padding:'9px 12px',borderRadius:'14px',background:lc2.soft,color:lc2.deep}},[
+            el('div',{style:{fontSize:'11px',opacity:'.75'}},'ล่าง '+A.lab(b.s,30)),
+            el('div',{style:{fontWeight:'600',fontSize:'19px'}},A.pl(b.p)),
+          ]),
+        ]),
+        el('button',{style:{width:'100%',padding:'11px',borderRadius:'14px',border:'none',cursor:'pointer',fontWeight:'600',fontSize:'14px',background:lc.deep,color:'#fff'},
+          onClick:()=>{ A.state.view='analyze'; A.selectLottery(L.id); }},'ดูวิเคราะห์เต็ม →'),
+      ]));
+    });
+    home.appendChild(grid);
+    home.appendChild(el('div',{style:{display:'flex',gap:'10px',alignItems:'flex-start',background:'rgba(255,255,255,.55)',border:'1px dashed rgba(40,30,60,.14)',borderRadius:'16px',padding:'14px 16px',fontSize:'12px',color:'#8a8499',lineHeight:'1.6',marginTop:'20px'}},[
+      el('span',{},'⚠️'),
+      el('span',{},'ตัวเลขคำนวณจากสถิติย้อนหลัง • สถิติในอดีตไม่รับประกันผลในอนาคต โปรดเล่นอย่างมีสติและพอประมาณ'),
+    ]));
+    wrap.appendChild(home);
+    return;
+  }
 
   /* ---------- status line ---------- */
   let statusText, statusColor='#9b94ad';

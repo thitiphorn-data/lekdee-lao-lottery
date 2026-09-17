@@ -194,7 +194,7 @@ const App = {
     while((m=re.exec(html))){
       const key=m[1]+m[2]+m[3]; if(seen[key]) continue; seen[key]=1;
       const dd=+m[1], mm=+m[2], be=+m[3], n4=+m[4];
-      const ts=new Date(be-543, mm-1, dd).getTime();
+      const ts=Date.UTC(be-543, mm-1, dd); // UTC midnight — ให้ตรงกับข้อมูลในตัว (seed) และ parseHanoi
       out.push({ ts, top:n4%100, bottom:Math.floor(n4/100) });
     }
     return out;
@@ -744,8 +744,8 @@ function render(){
   detail.appendChild(el('div',{style:{display:'flex',gap:'10px',alignItems:'flex-start',background:'rgba(255,255,255,.55)',border:'1px dashed rgba(40,30,60,.14)',borderRadius:'16px',padding:'14px 16px',fontSize:'12px',color:'#8a8499',lineHeight:'1.6',marginTop:'22px'}},[
     el('span',{},'⚠️'),
     el('span',{html: real
-      ? 'ตัวเลขคำนวณจาก<strong style="color:#6c6680">ผลหวยลาวจริง</strong>ที่ดึงสะสมไว้ • ช่วงแรกที่งวดยังน้อย เปอร์เซ็นต์จะแกว่งมาก กดอัปเดตทุกวันเพื่อสะสมข้อมูล • สถิติในอดีตไม่รับประกันผลในอนาคต โปรดเล่นอย่างมีสติ'
-      : 'ขณะนี้เป็น<strong style="color:#6c6680">ข้อมูลตัวอย่าง</strong> กด “อัปเดตผลจริง” เพื่อดึงผลหวยลาวจริง • สถิติในอดีตไม่รับประกันผลในอนาคต โปรดเล่นอย่างมีสติและพอประมาณ'}),
+      ? 'ตัวเลขคำนวณจาก<strong style="color:#6c6680">ผล'+l.name+'จริง</strong> '+total.toLocaleString()+' งวดในช่วงที่เลือก • ยิ่งงวดน้อย เปอร์เซ็นต์ยิ่งแกว่ง • สถิติในอดีตไม่รับประกันผลในอนาคต โปรดเล่นอย่างมีสติ'
+      : 'ขณะนี้เป็น<strong style="color:#6c6680">ข้อมูลตัวอย่าง</strong> กด “อัปเดตผลจริง” เพื่อดึงผล'+l.name+'จริง • สถิติในอดีตไม่รับประกันผลในอนาคต โปรดเล่นอย่างมีสติและพอประมาณ'}),
   ]));
 
   wrap.appendChild(detail);

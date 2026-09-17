@@ -751,8 +751,21 @@ function render(){
   wrap.appendChild(detail);
 }
 
-App._ensure();
-App.applyPreset('all');  // ตั้งช่วงวันที่เริ่มต้นให้ตรงกับข้อมูลจริง แล้ว render
+/* ---- โหลดข้อมูลล่าสุดแบบข้าม cache ----
+   ไฟล์ .js ด้านบนเป็นค่าตั้งต้น (ใช้ได้แม้เปิดจากไฟล์ file://)
+   แต่เบราว์เซอร์มัก cache ไว้ ทำให้เห็นข้อมูลเก่าแม้ระบบอัปเดตทุกวันแล้ว
+   จึงลองดึง .json สดมาทับก่อนเริ่ม (ถ้าดึงไม่ได้ ก็ใช้ค่าตั้งต้นเดิม) */
+(async function boot(){
+  const v=Date.now();
+  const get=(f)=>fetch(f+'?v='+v,{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
+  try{
+    const [lao,han]=await Promise.all([get('lao_history.json'), get('hanoi_history.json')]);
+    if(Array.isArray(lao) && lao.length) window.LAO_HISTORY=lao;
+    if(han && typeof han==='object' && Object.keys(han).length) window.HANOI_HISTORY=han;
+  }catch(e){}
+  App._ensure();
+  App.applyPreset('all');  // ตั้งช่วงวันที่เริ่มต้นให้ตรงกับข้อมูลจริง แล้ว render
+})();
 </script>
 </body>
 </html>

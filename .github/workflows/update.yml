@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  issues: write             # ใช้เปิด issue แจ้งเตือนเวลาพัง
 
 concurrency:
   group: update-lao
@@ -35,11 +36,47 @@ jobs:
         run: |
           if git diff --quiet -- lao_history.json hanoi_history.json; then
             echo "ไม่มีงวดใหม่ — ข้าม"
-            exit 0
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add lao_history.js lao_history.json lao_history.csv lao_history.xlsx \
+                    hanoi_history.js hanoi_history.json hanoi_history.csv hanoi_history.xlsx
+            git commit -m "อัปเดตผลหวยลาว+ฮานอยอัตโนมัติ $(date -u +%Y-%m-%d)"
+            git push
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lao_history.js lao_history.json lao_history.csv lao_history.xlsx \
-                  hanoi_history.js hanoi_history.json hanoi_history.csv hanoi_history.xlsx
-          git commit -m "อัปเดตผลหวยลาว+ฮานอยอัตโนมัติ $(date -u +%Y-%m-%d)"
-          git push
+
+      # ตรวจว่าข้อมูลยังสดอยู่ไหม — จับกรณี "รันผ่านแต่ข้อมูลไม่มา" (พังเงียบ)
+      - name: ตรวจความสดของข้อมูล
+        id: fresh
+        run: python tools/check_fresh.py
+
+      # ถ้าขั้นตอนไหนล้ม → เปิด issue แจ้งเตือน (GitHub จะส่งอีเมลให้เจ้าของ repo)
+      - name: แจ้งเตือนเมื่อพัง
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          STALE: ${{ steps.fresh.outputs.stale }}
+        run: |
+          TITLE="ระบบอัปเดตผลหวยมีปัญหา"
+          BODY="ระบบอัปเดตอัตโนมัติทำงานไม่สำเร็จ ($(date -u +%Y-%m-%d))
+
+          ${STALE:-ดึงข้อมูลหรือ push ไม่สำเร็จ}
+
+          ดู log: ${RUN_URL}
+
+          **ทำไมต้องรีบดู:** หน้าต้นทางฮานอยเก็บย้อนหลังแค่ ~4 วัน
+          ถ้าปล่อยค้างนานกว่านั้น ข้อมูลช่วงที่ขาดจะหายถาวร กู้ไม่ได้
+
+          วิธีแก้เบื้องต้น: กด Re-run ที่หน้า Actions — ถ้ายังพัง แปลว่าเว็บต้นทาง
+          เปลี่ยนรูปแบบ ต้องแก้ตัวแปลงผลใน tools/fetch_history.py หรือ tools/fetch_hanoi.py"
+
+          # ถ้ามี issue เดิมที่ยังเปิดอยู่ ให้คอมเมนต์ต่อ (กันสแปมวันละใบ)
+          EXISTING=$(gh issue list --label "auto-update-failed" --state open --limit 1 --json number -q '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+            echo "คอมเมนต์ต่อใน issue #$EXISTING"
+          else
+            gh label create "auto-update-failed" --color B60205 --description "ระบบอัปเดตอัตโนมัติล้มเหลว" 2>/dev/null || true
+            gh issue create --title "$TITLE" --label "auto-update-failed" --body "$BODY"
+          fi

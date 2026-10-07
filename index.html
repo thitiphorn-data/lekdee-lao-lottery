@@ -637,7 +637,7 @@ function render(){
 
   detail.appendChild(filterBar(true));
 
-  /* ช่วงที่เคยออกมากสุด + 3 ค่าคู่กัน: สถิติในอดีต / ทำนายย้อนหลังได้จริง / ซื้อชุดไหนก็ได้
+  /* ช่วงที่เคยออกมากสุด + 3 ค่าคู่กัน: สถิติในอดีต / ทำนายย้อนหลังได้จริง (+ ประโยคเทียบกับซื้อชุดไหนก็ได้)
      (ค่า "ในอดีต" สูงเกินจริงเสมอ เพราะเลือกช่วงหลังรู้ผลแล้ว — จำลองด้วยเลขสุ่มล้วนก็ได้ราว 33–35%) */
   const bres=A.backtest(size, fa, fb);
   const stat=(lab,val,strong,cc)=>el('div',{style:{flex:'1',minWidth:'0',padding:'8px 10px',borderRadius:'12px',background:strong?cc.soft:'#f6f4fa',display:'flex',flexDirection:'column',justifyContent:'space-between',gap:'2px'}},[
@@ -655,10 +655,9 @@ function render(){
       el('div',{style:{display:'flex',gap:'8px',marginBottom:'8px'}},[
         stat('สถิติในอดีต', A.pl(a.best.p), false, cc),
         stat('ทำนายย้อนหลังได้จริง', n?A.pl(acc):'–', true, cc),
-        stat('ซื้อ '+size+' ตัวชุดไหนก็ได้', '≈'+size+'%', false, cc),
       ]),
       el('div',{style:{fontSize:'12px',color:'#7c7690',lineHeight:'1.5',marginBottom:'12px'}},
-        (n>=30?'ทำนายย้อนหลัง '+n.toLocaleString()+' งวด: '+v.txt:'ช่วงวันที่สั้นเกินไปที่จะทดสอบย้อนหลัง')+' • “สถิติในอดีต” สูงกว่าเพราะเลือกช่วงหลังรู้ผลแล้ว'),
+        (n>=30?'ทำนายย้อนหลัง '+n.toLocaleString()+' งวด: '+v.txt+' (≈'+size+'%)':'ช่วงวันที่สั้นเกินไปที่จะทดสอบย้อนหลัง')+' • “สถิติในอดีต” สูงกว่าเพราะเลือกช่วงหลังรู้ผลแล้ว'),
       el('div',{style:{display:'flex',flexWrap:'wrap',gap:'5px'}},
         Array.from({length:size},(_,i)=>el('span',{style:chip(cc)},A.pad(a.best.s+i)))),
     ]);

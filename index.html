@@ -56,7 +56,7 @@ function el(tag, opts, children){
 /* ============================================================
    เลขดี — วิเคราะห์ "หวยลาว/ฮานอย" จากสถิติย้อนหลัง (หน้าเดียว)
    ข้อมูลหลัก = lao_history / hanoi_history (GitHub Actions ดึง + ตรวจเทียบหลายแหล่งทุกคืน)
-   ปุ่ม "อัปเดตผลจริง" ดึงจาก Sanook ผ่าน CORS proxy ฟรี เติมงวดที่ยังไม่มี เก็บใน localStorage
+   ปุ่ม "อัปเดตผลจริง" โหลดข้อมูลชุดล่าสุดจาก GitHub + เติมงวดของวันนี้จากบ้านกีฬา (เก็บใน localStorage)
    ============================================================ */
 const App = {
   state: {
@@ -187,101 +187,104 @@ const App = {
     return { rows, accT:nT?hitT/nT:0, accB:nB?hitB/nB:0, hitT, hitB, nT, nB };
   },
 
-  /* ---- live update: ยิงหลาย proxy พร้อมกัน เอาอันที่เร็วสุดที่สำเร็จ ---- */
-  laoUrl(){ const d=new Date(); return 'https://www.sanook.com/news/laolotto/'+this.pad(d.getDate())+this.pad(d.getMonth()+1)+(d.getFullYear()+543)+'/'; },
-  hanoiUrl(){ return 'https://www.sanook.com/news/9837690/'; },
-  parseLao(html){
-    const re=/"dateSlug\\?":\\?"(\d{2})(\d{2})(\d{4})"[\s\S]{0,400}?"last4Prize\\?":\\?"(\d{4})"/g;
-    const out=[]; const seen={}; let m;
-    while((m=re.exec(html))){
-      const key=m[1]+m[2]+m[3]; if(seen[key]) continue; seen[key]=1;
-      const dd=+m[1], mm=+m[2], be=+m[3], n4=+m[4];
-      const ts=Date.UTC(be-543, mm-1, dd); // UTC midnight — ให้ตรงกับข้อมูลในตัว (seed) และ parseHanoi
-      out.push({ ts, top:n4%100, bottom:Math.floor(n4/100) });
+  /* ---- ปุ่ม "อัปเดตผลจริง" (ไม่ใช้ CORS proxy แล้ว — proxy ฟรีที่เคยใช้ตายหมด) ----
+     1) โหลดข้อมูลที่ระบบตรวจเทียบหลายเว็บแล้วชุดล่าสุดจาก GitHub (กันหน้าที่เปิดค้างไว้เห็นข้อมูลเก่า)
+     2) เติมงวดที่ระบบรอบกลางคืนยังไม่ได้ดึง จากบ้านกีฬา — WordPress API ของเว็บนี้อนุญาตให้เว็บอื่นดึงตรงได้
+        (ฮานอยลงผลราว 19:45 / ลาวราว 20:40) งวดพวกนี้มาจากเว็บเดียว ใช้เติมเฉพาะวันที่ยังไม่มี
+        แล้วรอบกลางคืนจะแทนด้วยข้อมูลที่ตรวจเทียบแล้ว (draws() ให้ข้อมูลในตัวชนะเสมอ) */
+  RAW_URL:'https://raw.githubusercontent.com/thitiphorn-data/lekdee-lao-lottery/main/',
+  async getJSON(url){
+    const ctrl=new AbortController(); const tid=setTimeout(()=>ctrl.abort(),12000);
+    try{ const r=await fetch(url,{cache:'no-store',signal:ctrl.signal}); if(!r.ok) throw new Error('HTTP '+r.status); return await r.json(); }
+    finally{ clearTimeout(tid); }
+  },
+  async reloadData(bases){   // bases: '' = โฟลเดอร์เดียวกับหน้าเว็บ, RAW_URL = GitHub โดยตรง (ใช้ได้แม้เปิดจากไฟล์ในเครื่อง)
+    for(const base of bases){
+      try{
+        const v='?v='+Date.now();
+        const [lao,han]=await Promise.all([this.getJSON(base+'lao_history.json'+v), this.getJSON(base+'hanoi_history.json'+v)]);
+        if(!Array.isArray(lao) || !lao.length || !han || typeof han!=='object' || !Object.keys(han).length) continue;
+        window.LAO_HISTORY=lao; window.HANOI_HISTORY=han; this._seed=null;
+        return true;
+      }catch(e){}
+    }
+    return false;
+  },
+  findDate(t){   // '6/10/69', '5/10/2569', '6 ตุลาคม 2569', '6 ต.ค.2569' → UTC midnight
+    const TM_FULL=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+    let d,mo,y,m=t.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    if(m){ d=+m[1]; mo=+m[2]; y=+m[3]; }
+    else {
+      m=t.match(/(\d{1,2})\s*([฀-๿.]+?)\s*(\d{4})/); if(!m) return null;
+      const nm=m[2].replace(/\.$/,'');
+      mo=1+this.TM.findIndex(x=>x.replace(/\.$/,'')===nm); if(!mo) mo=1+TM_FULL.indexOf(nm); if(!mo) return null;
+      d=+m[1]; y=+m[3];
+    }
+    if(y<100) y+=2500; if(y>2400) y-=543;
+    return Date.UTC(y,mo-1,d);
+  },
+  /* บทความ "ตรวจหวยลาว/ฮานอยวันนี้ งวดประจำวัน…" ของบ้านกีฬา → {lao:[…]} หรือ {hanoi:[…], hanoiSpecial:[…], …}
+     กติกาตัดเลขเดียวกับ tools/sources.py — ลาว: บน = 2 ตัวท้ายของเลข 4 ตัว, ล่าง = 2 ตัวหน้า
+     ฮานอย: บน = ท้ายรางวัลพิเศษ, ล่าง = ท้ายรางวัลที่ 1 (บทความเขียนเป็น 3 ตัวบน/2 ตัวบน/2 ตัวล่างให้แล้ว) */
+  parseBankeela(posts, kind){
+    const strip=s=>String(s||'').replace(/<[^>]+>/g,' ').replace(/&[a-z#0-9]+;/gi,' ').replace(/\s+/g,' ');
+    const typeKey=(n)=>{ n=n.trim().toLowerCase();
+      return n.includes('เฉพาะกิจ')?'hanoiTask':n.includes('พิเศษ')?'hanoiSpecial':(n.includes('vip')||n.includes('วีไอพี'))?'hanoiVip':(n===''||n.includes('ปกติ'))?'hanoi':null; };
+    const bre=/ผลหวยฮานอย\s*([฀-๿a-zA-Z ]{0,14}?)\s*(?:เลข\s*4\s*ตัว\s*:?\s*\d{4}\s*)?เลข\s*3\s*ตัวบน\s*:?\s*(\d{3})\s*เลข\s*2\s*ตัวบน\s*:?\s*(\d{2})\s*เลข\s*2\s*ตัวล่าง\s*:?\s*(\d{2})(?!\d)/g;
+    const out=kind==='lao'?{lao:[]}:{hanoi:[],hanoiSpecial:[],hanoiVip:[],hanoiTask:[]}; const seen={};
+    for(const p of (Array.isArray(posts)?posts:[])){
+      const title=strip(p.title&&p.title.rendered), body=strip(p.content&&p.content.rendered);
+      const k0=title.indexOf('งวดประจำวัน'); if(k0<0) continue;
+      const ts=this.findDate(title.slice(k0)); if(ts==null||isNaN(ts)) continue;   // หัวข่าวไม่มีวันที่ → ไม่เดา
+      if(kind==='lao'){
+        const m=body.match(/เลขท้าย\s*4\s*ตัว\s*:?\s*(\d{4})(?!\d)/); if(!m) continue;   // ยังไม่ออก = 'xxxx'
+        const k='lao|'+this.ymd(ts); if(seen[k]) continue; seen[k]=1;
+        out.lao.push({ ts, top:+m[1]%100, bottom:Math.floor(+m[1]/100) });
+      } else {
+        let m; bre.lastIndex=0;
+        while((m=bre.exec(body))){
+          const key=typeKey(m[1]); if(!key || m[2].slice(-2)!==m[3]) continue;   // 3 ตัวบนต้องลงท้ายด้วย 2 ตัวบน
+          const k=key+'|'+this.ymd(ts); if(seen[k]) continue; seen[k]=1;
+          out[key].push({ ts, top:+m[3], bottom:+m[4] });
+        }
+      }
     }
     return out;
   },
-  /* แบ่งหน้าตามหัวข้อ <h2>/<h3> ที่มีวันที่ — ผลใต้หัวข้อไหนเป็นของวันนั้น
-     (ของเดิมเดาวันจากหัวข้อที่อยู่ใกล้สุด ทำให้ผลวันล่าสุดไปลงผิดวันได้)
-     หัวข้อวันล่าสุดเขียน "6 ตุลาคม 2569" ส่วนวันก่อนหน้าเขียน "5/10/2569" — รองรับทั้งสองแบบ */
-  parseHanoi(raw){
-    const strip=s=>s.replace(/<[^>]+>/g,' ').replace(/&[a-z#0-9]+;/gi,' ').replace(/\s+/g,' ');
-    const TM_FULL=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
-    const findDate=(t)=>{
-      let d,mo,y,m=t.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
-      if(m){ d=+m[1]; mo=+m[2]; y=+m[3]; }
-      else {
-        m=t.match(/(\d{1,2})\s*([฀-๿.]+?)\s*(\d{4})/); if(!m) return null;
-        const nm=m[2].replace(/\.$/,'');
-        mo=1+this.TM.findIndex(x=>x.replace(/\.$/,'')===nm); if(!mo) mo=1+TM_FULL.indexOf(nm); if(!mo) return null;
-        d=+m[1]; y=+m[3];
-      }
-      if(y<100) y+=2500; if(y>2400) y-=543;
-      return Date.UTC(y,mo-1,d);
-    };
-    const typeKey=(n)=>{ n=n.trim().toLowerCase();
-      return n.includes('เฉพาะกิจ')?'hanoiTask':n.includes('พิเศษ')?'hanoiSpecial':(n.includes('vip')||n.includes('วีไอพี'))?'hanoiVip':n.includes('ปกติ')?'hanoi':null; };
-    const heads=[]; const hre=/<h[1-4][^>]*>([\s\S]*?)<\/h[1-4]>/gi; let h;
-    while((h=hre.exec(raw))) heads.push({s:h.index, e:hre.lastIndex, t:strip(h[1])});
-    const bre=/ผลหวยฮานอย\s*([฀-๿a-zA-Z ]{0,14}?)\s*(?:เลข\s*4\s*ตัว\s*:?\s*\d{4}\s*)?เลข\s*3\s*ตัวบน\s*:?\s*(\d{3})\s*เลข\s*2\s*ตัวบน\s*:?\s*(\d{2})\s*เลข\s*2\s*ตัวล่าง\s*:?\s*(\d{2})/g;
-    const out={hanoi:[],hanoiSpecial:[],hanoiVip:[],hanoiTask:[]}; const seen={};
-    heads.forEach((hd,i)=>{
-      if(!hd.t.includes('ฮานอย')) return;
-      const ts=findDate(hd.t); if(ts==null||isNaN(ts)) return;   // หัวข้อไม่มีวันที่ → ไม่เดา
-      const seg=strip(raw.slice(hd.e, i+1<heads.length?heads[i+1].s:raw.length)); let m;
-      while((m=bre.exec(seg))){
-        const key=typeKey(m[1]); if(!key || m[2].slice(-2)!==m[3]) continue;   // 3 ตัวบนต้องลงท้ายด้วย 2 ตัวบน
-        const k=key+'|'+this.ymd(ts); if(seen[k]) continue; seen[k]=1;
-        out[key].push({ ts, top:+m[3], bottom:+m[4] });
-      }
-    });
-    return out;
-  },
-  async fetchProxied(url){
-    const sources=[
-      { u:'https://api.allorigins.win/raw?url='+encodeURIComponent(url) },
-      { u:'https://api.codetabs.com/v1/proxy/?quest='+encodeURIComponent(url) },
-      { u:'https://corsproxy.io/?url='+encodeURIComponent(url) },
-      { u:'https://api.allorigins.win/get?url='+encodeURIComponent(url), json:true },
-      { u:'https://thingproxy.freeboard.io/fetch/'+url },
-      { u:'https://test.cors.workers.dev/?'+url },
-    ];
-    const tryOne=(s)=>{
-      const ctrl=new AbortController();
-      const tid=setTimeout(()=>ctrl.abort(),10000);
-      return fetch(s.u,{signal:ctrl.signal}).then(async r=>{
-        clearTimeout(tid);
-        if(!r.ok) throw new Error('HTTP '+r.status);
-        const t = s.json ? ((await r.json()).contents||'') : await r.text();
-        if(!t || t.length<800) throw new Error('empty');
-        return t;
-      }, e=>{ clearTimeout(tid); throw e; });
-    };
-    return Promise.any(sources.map(tryOne));
+  async fetchLatest(kind){
+    const q=encodeURIComponent(kind==='lao'?'ตรวจหวยลาววันนี้':'ตรวจหวยฮานอยวันนี้');
+    const posts=await this.getJSON('https://www.bankeela.info/wp-json/wp/v2/posts?search='+q+'&per_page=10&_fields=title,content');
+    return this.parseBankeela(posts, kind);
   },
   async update(){
     if(this.updating) return;
     this._ensure();
-    const id=this.state.lottery;
+    const id=this.state.lottery, kind=id==='lao'?'lao':'hanoi';
     this.updating=true; this.updateStatus=''; this.updateOk=null; render();
+    const gotData=await this.reloadData(['', this.RAW_URL]);
+    this._ensure();
+    let added=0, latestOk=false;
     try{
-      if(id==='lao'){
-        const list=this.parseLao(await this.fetchProxied(this.laoUrl()));
-        if(list.length){ this.mergeReal(list,'lao'); this.lastUpd.lao=Date.now(); this.saveReal(); this.updateOk=true;
-          this.updateStatus='ดึงสำเร็จ • ผลล่าสุด '+list.length+' งวด (ข้อมูลทั้งหมด '+this.draws('lao').length+' งวด)'; }
-        else { this.updateOk=false; this.updateStatus='เชื่อมต่อได้ แต่ยังอ่านผลไม่ได้ — ลองใหม่อีกครั้ง'; }
-      } else {
-        const all=this.parseHanoi(await this.fetchProxied(this.hanoiUrl()));
-        for(const k of this.HANOI_KEYS){ if(all[k]&&all[k].length){ this.mergeReal(all[k],k); this.lastUpd[k]=Date.now(); } }
-        const n=(all[id]||[]).length;
-        if(n){ this.saveReal(); this.updateOk=true;
-          this.updateStatus='ดึงสำเร็จ • อัปเดตฮานอยทุกประเภท (ล่าสุด '+n+' งวด, รวม '+this.draws(id).length+' งวด)'; }
-        else { this.updateOk=false; this.updateStatus='เชื่อมต่อได้ แต่ยังอ่านผลไม่ได้ — ลองใหม่อีกครั้ง'; }
+      const res=await this.fetchLatest(kind); latestOk=true;
+      for(const k in res){
+        const have=new Set((this._seed[k]||[]).map(d=>this.ymd(d.ts)));
+        const extra=res[k].filter(d=>!have.has(this.ymd(d.ts)));   // เติมเฉพาะวันที่ข้อมูลที่ตรวจแล้วยังไม่มี
+        if(extra.length) this.mergeReal(extra,k);
+        if(k===id) added=extra.length;
+        this.lastUpd[k]=Date.now();
       }
-    }catch(e){
-      this.updateOk=false; this.updateStatus='ดึงไม่สำเร็จ — เน็ต/พร็อกซีอาจไม่ว่าง ลองกดใหม่อีกครั้งสักครู่';
-    }
-    this.updating=false; render();
+      this.saveReal();
+    }catch(e){}
+    const all=this.draws(id), last=all[all.length-1];
+    this.updateOk=gotData||latestOk;
+    this.updateStatus=!this.updateOk ? 'ดึงไม่สำเร็จ — ตรวจการเชื่อมต่ออินเทอร์เน็ต แล้วกดใหม่อีกครั้ง'
+      : 'อัปเดตแล้ว • ข้อมูลทั้งหมด '+all.length+' งวด (ล่าสุด '+this.thai(last.ts)+')'
+        +(added?' • มี '+added+' งวดล่าสุดจากบ้านกีฬาที่ยังไม่ผ่านการตรวจเทียบ (ระบบจะยืนยันให้รอบกลางคืน)':'')
+        +(!gotData?' • โหลดข้อมูลที่ตรวจแล้วชุดล่าสุดไม่ได้':'')
+        +(!latestOk?' • ดึงงวดของวันนี้จากบ้านกีฬาไม่ได้':'');
+    this.updating=false;
+    // ช่วงวันที่แบบ "ทั้งหมด/6 เดือน/…" ต้องขยายให้ถึงงวดใหม่ด้วย ไม่งั้นงวดใหม่ถูกกรองทิ้ง
+    if(['all','6m','3m','1m'].includes(this.state.preset)) this.applyPreset(this.state.preset); else render();
   },
 };
 
@@ -387,7 +390,7 @@ function render(){
 
   /* ---------- status line ---------- */
   let statusText, statusColor='#9b94ad';
-  if(A.updating){ statusText='กำลังเชื่อมต่อเว็บผลหวย… (ปกติ 2–8 วินาที)'; }
+  if(A.updating){ statusText='กำลังโหลดข้อมูลล่าสุด… (ปกติ 1–5 วินาที)'; }
   else if(A.updateStatus){ statusText=A.updateStatus; statusColor=A.updateOk?'#1f7a4d':'#c0563f'; }
   else if(A.lastUpd && A.lastUpd[A.state.lottery]){ const t=A.lastUpd[A.state.lottery], u=new Date(t); statusText='อัปเดตล่าสุด '+A.thai(t)+' '+A.pad(u.getHours())+':'+A.pad(u.getMinutes())+' น. • กด “อัปเดตผลจริง” เพื่อดึงงวดใหม่'; statusColor='#1f7a4d'; }
   else if(A.isReal()){ const a=A.draws(); statusText='มีข้อมูลจริงในตัว '+a.length+' งวด (ถึง '+A.thai(a[a.length-1].ts)+') • กด “อัปเดตผลจริง” เพื่อดึงงวดใหม่'; statusColor='#1f7a4d'; }
@@ -777,13 +780,7 @@ function render(){
    แต่เบราว์เซอร์มัก cache ไว้ ทำให้เห็นข้อมูลเก่าแม้ระบบอัปเดตทุกวันแล้ว
    จึงลองดึง .json สดมาทับก่อนเริ่ม (ถ้าดึงไม่ได้ ก็ใช้ค่าตั้งต้นเดิม) */
 (async function boot(){
-  const v=Date.now();
-  const get=(f)=>fetch(f+'?v='+v,{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
-  try{
-    const [lao,han]=await Promise.all([get('lao_history.json'), get('hanoi_history.json')]);
-    if(Array.isArray(lao) && lao.length) window.LAO_HISTORY=lao;
-    if(han && typeof han==='object' && Object.keys(han).length) window.HANOI_HISTORY=han;
-  }catch(e){}
+  await App.reloadData(['']);   // เปิดจากไฟล์ในเครื่อง (file://) โหลดไม่ได้ → ใช้ค่าจาก .js ด้านบนแทน
   App._ensure();
   App.applyPreset('all');  // ตั้งช่วงวันที่เริ่มต้นให้ตรงกับข้อมูลจริง แล้ว render
 })();

@@ -142,14 +142,14 @@ const App = {
   cov(p,total,w){ let best={s:0,p:-1}; const pts=[]; const end=100-w; for(let s=0;s<=end;s++){ const c=p[s+w]-p[s]; const pr=total?c/total:0; pts.push(pr); if(pr>best.p) best={s,p:pr}; } return {pts,best}; },
   lab(s,w){ return this.pad(s)+'–'+this.pad(s+w-1); },
   pl(p){ return Math.round(p*100)+'%'; },
-  /* ผลทำนายย้อนหลังเทียบการซื้อ size ตัวชุดไหนก็ได้ — ชุด size ตัวจาก 100 ตัว ไม่ว่าเลขชุดไหนก็ถูกราว size% อยู่แล้ว
+  /* สรุปผลทำนายย้อนหลัง — ชุด size ตัวจาก 100 ตัว ไม่ว่าเลขชุดไหนก็ถูกราว size% อยู่แล้ว (ใช้เป็นเกณฑ์ภายใน ไม่แสดงบนหน้า)
      (ทดสอบกับข้อมูลจริงทั้ง 5 หวย ต.ค. 2569: วิธีเลือกช่วงจากสถิติถูก 30.6% เทียบ 30% — ไม่ต่างกัน) */
   verdict(hit, n, size){
     if(n<30) return {txt:'งวดน้อยเกินไปที่จะสรุป', tone:0};
     const p=size/100, z=(hit-n*p)/Math.sqrt(n*p*(1-p));
-    if(z>=2)  return {txt:'สูงกว่าซื้อ '+size+' ตัวชุดไหนก็ได้เล็กน้อย แต่อาจเป็นความบังเอิญ', tone:1};
-    if(z<=-2) return {txt:'ต่ำกว่าซื้อ '+size+' ตัวชุดไหนก็ได้', tone:-1};
-    return {txt:'ไม่ต่างจากซื้อ '+size+' ตัวชุดไหนก็ได้', tone:0};
+    if(z>=2)  return {txt:'ถูกมากกว่าปกติเล็กน้อย แต่อาจเป็นความบังเอิญ', tone:1};
+    if(z<=-2) return {txt:'ถูกน้อยกว่าปกติ', tone:-1};
+    return {txt:'สถิติไม่ได้ช่วยให้ถูกมากขึ้น', tone:0};
   },
   colorFor(hue){
     // design tokens (pastel): [L_accent,C_accent, L_deep,C_deep, L_soft,C_soft]
@@ -361,12 +361,10 @@ function render(){
       const lc=C(L.hue), lc2=C(L.hue+16), last=dr[dr.length-1], tot=dr.length;
       const a=A.cov(A.pre(A.cnt(dr,'top')),tot,30).best, b=A.cov(A.pre(A.cnt(dr,'bottom')),tot,30).best;
       const bt=A.backtest(30,-Infinity,Infinity,L.id);
-      const sideBox=(cc,label,acc,n)=>el('div',{style:{flex:'1',padding:'9px 12px',borderRadius:'14px',background:cc.soft,color:cc.deep}},[
+      const sideBox=(cc,label,s,acc,n)=>el('div',{style:{flex:'1',padding:'9px 12px',borderRadius:'14px',background:cc.soft,color:cc.deep}},[
         el('div',{style:{fontSize:'11px',opacity:'.75'}},label),
-        el('div',{style:{display:'flex',alignItems:'baseline',gap:'6px',flexWrap:'wrap'}},[
-          el('span',{style:{fontWeight:'600',fontSize:'19px'}},n?A.pl(acc):'–'),
-          el('span',{style:{fontSize:'11px',opacity:'.7'}},'ชุดไหนก็ได้ ≈30%'),
-        ]),
+        el('div',{style:{fontWeight:'700',fontSize:'22px'}},A.pad(s)+'–'+A.pad(s+29)),
+        el('div',{style:{fontSize:'11px',opacity:'.75'}},'ทำนายย้อนหลังถูก '+(n?A.pl(acc):'–')),
       ]);
       grid.appendChild(el('div',{style:{background:'#fff',borderRadius:'22px',padding:'18px',boxShadow:'0 12px 32px rgba(60,40,100,.06)',border:'1px solid rgba(40,30,60,.05)',display:'flex',flexDirection:'column',gap:'13px'}},[
         el('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'8px'}},[
@@ -384,9 +382,9 @@ function render(){
           ]),
         ]),
         el('div',{style:{height:'1px',background:'rgba(40,30,60,.06)'}}),
-        el('div',{style:{fontSize:'11px',color:'#9b94ad'}},'ช่วง 30 ตัวที่เคยออกมากสุด • ทำนายย้อนหลัง '+bt.nT.toLocaleString()+' งวด ถูก'),
+        el('div',{style:{fontSize:'11px',color:'#9b94ad'}},'ช่วง 30 ตัวที่ออกบ่อยที่สุด'),
         el('div',{style:{display:'flex',gap:'8px'}},[
-          sideBox(lc,'บน '+A.lab(a.s,30),bt.accT,bt.nT), sideBox(lc2,'ล่าง '+A.lab(b.s,30),bt.accB,bt.nB),
+          sideBox(lc,'2 ตัวบน',a.s,bt.accT,bt.nT), sideBox(lc2,'2 ตัวล่าง',b.s,bt.accB,bt.nB),
         ]),
         el('button',{style:{width:'100%',padding:'11px',borderRadius:'14px',border:'none',cursor:'pointer',fontWeight:'600',fontSize:'14px',background:lc.deep,color:'#fff'},
           onClick:()=>{ A.state.view='analyze'; A.selectLottery(L.id); }},'ดูวิเคราะห์เต็ม →'),
@@ -395,7 +393,7 @@ function render(){
     home.appendChild(grid);
     home.appendChild(el('div',{style:{display:'flex',gap:'10px',alignItems:'flex-start',background:'rgba(255,255,255,.55)',border:'1px dashed rgba(40,30,60,.14)',borderRadius:'16px',padding:'14px 16px',fontSize:'12px',color:'#8a8499',lineHeight:'1.6',marginTop:'20px'}},[
       el('span',{},'⚠️'),
-      el('span',{},'% บนการ์ด = ถ้าใช้สถิติเลือกช่วงทำนายทุกงวดที่ผ่านมา จะถูกกี่ % — ซื้อ 30 ตัวชุดไหนก็ได้ถูกราว 30% อยู่แล้ว ผลที่ได้จึงไม่ได้ดีกว่า • สถิติในอดีตไม่รับประกันผลในอนาคต โปรดเล่นอย่างมีสติและพอประมาณ'),
+      el('span',{},'% บนการ์ด = ถ้าใช้สถิติเลือกช่วงทำนายทุกงวดที่ผ่านมา จะถูกกี่ % • สถิติในอดีตไม่รับประกันผลในอนาคต โปรดเล่นอย่างมีสติและพอประมาณ'),
     ]));
     wrap.appendChild(home);
     return;
@@ -587,7 +585,7 @@ function render(){
         el('span',{style:{fontWeight:'600',fontSize:'13px',padding:'5px 13px',borderRadius:'999px',background:cc.soft,color:cc.deep}},label),
         el('div',{style:{display:'flex',alignItems:'baseline',gap:'10px',margin:'14px 0 2px',flexWrap:'wrap'}},[
           el('span',{style:{fontWeight:'600',fontSize:'42px',lineHeight:'1',color:cc.deep}},(n?Math.round(acc*100):0)+'%'),
-          el('span',{style:{fontSize:'13px',color:'#9b94ad'}},'ทายถูก • ซื้อ '+size+' ตัวชุดไหนก็ได้ ≈'+size+'%'),
+          el('span',{style:{fontSize:'13px',color:'#9b94ad'}},'ทายถูก'),
         ]),
         el('div',{style:{fontSize:'14px',color:'#7c7690'}},'ถูก '+hit+' จาก '+n+' งวด (ชุด '+size+' ตัว)'),
         el('div',{style:{fontSize:'13px',fontWeight:'600',marginTop:'8px',color:v.tone>0?'#1f7a4d':v.tone<0?'#c0563f':'#6c6680'}},'→ '+v.txt),
@@ -637,29 +635,25 @@ function render(){
 
   detail.appendChild(filterBar(true));
 
-  /* ช่วงที่เคยออกมากสุด + 3 ค่าคู่กัน: สถิติในอดีต / ทำนายย้อนหลังได้จริง (+ ประโยคเทียบกับซื้อชุดไหนก็ได้)
+  /* ช่วงที่เคยออกมากสุด + 3 ค่าคู่กัน: สถิติในอดีต / ทำนายย้อนหลังได้จริง
      (ค่า "ในอดีต" สูงเกินจริงเสมอ เพราะเลือกช่วงหลังรู้ผลแล้ว — จำลองด้วยเลขสุ่มล้วนก็ได้ราว 33–35%) */
   const bres=A.backtest(size, fa, fb);
-  const stat=(lab,val,strong,cc)=>el('div',{style:{flex:'1',minWidth:'0',padding:'8px 10px',borderRadius:'12px',background:strong?cc.soft:'#f6f4fa',display:'flex',flexDirection:'column',justifyContent:'space-between',gap:'2px'}},[
-    el('div',{style:{fontSize:'11px',color:'#9b94ad',lineHeight:'1.3'}},lab),
-    el('div',{style:{fontWeight:'600',fontSize:'21px',color:strong?cc.deep:'#6c6680'}},val),
-  ]);
   const mainPanel=(p,cc,label,acc,hit,n)=>{
-    const a=A.cov(p,total,size), v=A.verdict(hit,n,size);
+    const a=A.cov(p,total,size), cnt=Math.round(a.best.p*total);
     return el('div',{style:{background:'#fff',borderRadius:'22px',padding:'20px',boxShadow:'0 12px 32px rgba(60,40,100,.06)',border:'1px solid rgba(40,30,60,.05)'}},[
       el('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between'}},[
         el('span',{style:{fontWeight:'600',fontSize:'13px',padding:'5px 13px',borderRadius:'999px',background:cc.soft,color:cc.deep}},label),
         el('span',{style:{fontSize:'12px',color:'#9b94ad'}},'ชุด '+size+' ตัว'),
       ]),
-      el('div',{style:{fontWeight:'500',fontSize:'21px',margin:'12px 0 10px'}},'ช่วงที่เคยออกมากสุด '+A.lab(a.best.s,size)),
-      el('div',{style:{display:'flex',gap:'8px',marginBottom:'8px'}},[
-        stat('สถิติในอดีต', A.pl(a.best.p), false, cc),
-        stat('ทำนายย้อนหลังได้จริง', n?A.pl(acc):'–', true, cc),
-      ]),
-      el('div',{style:{fontSize:'12px',color:'#7c7690',lineHeight:'1.5',marginBottom:'12px'}},
-        (n>=30?'ทำนายย้อนหลัง '+n.toLocaleString()+' งวด: '+v.txt+' (≈'+size+'%)':'ช่วงวันที่สั้นเกินไปที่จะทดสอบย้อนหลัง')+' • “สถิติในอดีต” สูงกว่าเพราะเลือกช่วงหลังรู้ผลแล้ว'),
-      el('div',{style:{display:'flex',flexWrap:'wrap',gap:'5px'}},
+      el('div',{style:{fontSize:'13px',color:'#9b94ad',margin:'14px 0 0'}},'ช่วงที่ออกบ่อยที่สุด'),
+      el('div',{style:{fontWeight:'700',fontSize:'44px',lineHeight:'1.1',color:cc.deep,margin:'2px 0 12px'}},A.pad(a.best.s)+' – '+A.pad(a.best.s+size-1)),
+      el('div',{style:{display:'flex',flexWrap:'wrap',gap:'5px',marginBottom:'12px'}},
         Array.from({length:size},(_,i)=>el('span',{style:chip(cc)},A.pad(a.best.s+i)))),
+      el('div',{style:{fontSize:'12px',color:'#7c7690',lineHeight:'1.6'}},[
+        'เคยออกในช่วงนี้ '+cnt.toLocaleString()+' จาก '+total.toLocaleString()+' งวด ('+A.pl(a.best.p)+')',
+        el('br'),
+        n>=30 ? 'ทำนายย้อนหลัง '+n.toLocaleString()+' งวด ถูก '+hit.toLocaleString()+' งวด ('+A.pl(acc)+')' : 'ช่วงวันที่สั้นเกินไปที่จะทดสอบย้อนหลัง',
+      ]),
     ]);
   };
   detail.appendChild(el('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))',gap:'16px',marginBottom:'20px'}},[
@@ -667,7 +661,7 @@ function render(){
   ]));
 
   /* size comparison cards */
-  detail.appendChild(el('div',{style:{fontSize:'13px',color:'#9b94ad',marginBottom:'9px'}},'เทียบขนาดชุด — ซื้อกว้างขึ้น โอกาสเพิ่มตามจำนวนตัวพอดี (20 ตัว ≈ 20%, 40 ตัว ≈ 40%) และต้นทุนก็เพิ่มเท่ากัน (กดเพื่อเลือก)'));
+  detail.appendChild(el('div',{style:{fontSize:'13px',color:'#9b94ad',marginBottom:'9px'}},'เทียบขนาดชุด — ซื้อกว้างขึ้นโอกาสถูกเพิ่ม แต่ต้นทุนก็เพิ่มเท่ากัน (กดเพื่อเลือก)'));
   const sizeCardGrid = el('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:'12px',marginBottom:'22px'}});
   // การ์ดสีหวยอ่อน อันที่เลือกมีกรอบสี deep (ตามดีไซน์)
   [40,30,20].forEach(w=>{
@@ -680,7 +674,7 @@ function render(){
         el('span',{style:{fontWeight:'600',fontSize:'18px'}},w+' ตัว'),
         el('span',{style:{fontSize:'11px',fontWeight:'600',padding:'3px 9px',borderRadius:'999px',background:c.soft,color:c.deep}},w===40?'กว้างสุด':w===30?'กลาง':'แคบสุด'),
       ]),
-      el('div',{style:{fontSize:'11px',color:'#a9a2b8',marginTop:'10px'}},'ทำนายย้อนหลังถูก • ซื้อ '+w+' ตัวชุดไหนก็ได้ ≈'+w+'%'),
+      el('div',{style:{fontSize:'11px',color:'#a9a2b8',marginTop:'10px'}},'ทำนายย้อนหลังถูก'),
       el('div',{style:{display:'flex',gap:'12px',marginTop:'4px'}},[
         el('div',{style:{flex:'1'}},[
           el('div',{style:{fontSize:'11px',color:'#a9a2b8'}},'บน'),
@@ -736,7 +730,7 @@ function render(){
               el('div',{style:{display:'flex',flexWrap:'wrap',gap:'5px'}},cold),
             ]),
           ]),
-          el('div',{style:{fontSize:'11px',color:'#9b94ad',lineHeight:'1.5'}},'ความถี่ในอดีตไม่ได้บอกว่างวดหน้าจะออกเลขไหน — ทดสอบย้อนหลังแล้ว เลือกตามนี้ถูกพอๆ กับซื้อเลขชุดไหนก็ได้'),
+          el('div',{style:{fontSize:'11px',color:'#9b94ad',lineHeight:'1.5'}},'ความถี่ในอดีตไม่ได้บอกว่างวดหน้าจะออกเลขไหน — ทดสอบย้อนหลังแล้ว เลือกตามนี้ไม่ได้ช่วยให้ถูกมากขึ้น'),
         ]),
       ]),
     ]));
@@ -763,7 +757,7 @@ function render(){
   detail.appendChild(el('div',{style:{display:'flex',gap:'10px',alignItems:'flex-start',background:'rgba(255,255,255,.55)',border:'1px dashed rgba(40,30,60,.14)',borderRadius:'16px',padding:'14px 16px',fontSize:'12px',color:'#8a8499',lineHeight:'1.6',marginTop:'22px'}},[
     el('span',{},'⚠️'),
     el('span',{html: real
-      ? 'ตัวเลขคำนวณจาก<strong style="color:#6c6680">ผล'+l.name+'จริง</strong> '+total.toLocaleString()+' งวดในช่วงที่เลือก • ยิ่งงวดน้อย เปอร์เซ็นต์ยิ่งแกว่ง • ทดสอบย้อนหลังแล้ว การเลือกช่วงจากสถิติถูกพอๆ กับซื้อเลขชุดไหนก็ได้ • สถิติในอดีตไม่รับประกันผลในอนาคต โปรดเล่นอย่างมีสติ'
+      ? 'ตัวเลขคำนวณจาก<strong style="color:#6c6680">ผล'+l.name+'จริง</strong> '+total.toLocaleString()+' งวดในช่วงที่เลือก • ยิ่งงวดน้อย เปอร์เซ็นต์ยิ่งแกว่ง • ทดสอบย้อนหลังแล้ว การเลือกช่วงจากสถิติไม่ได้ช่วยให้ถูกมากขึ้น • สถิติในอดีตไม่รับประกันผลในอนาคต โปรดเล่นอย่างมีสติ'
       : 'ขณะนี้เป็น<strong style="color:#6c6680">ข้อมูลตัวอย่าง</strong> กด “อัปเดตผลจริง” เพื่อดึงผล'+l.name+'จริง • สถิติในอดีตไม่รับประกันผลในอนาคต โปรดเล่นอย่างมีสติและพอประมาณ'}),
   ]));
 

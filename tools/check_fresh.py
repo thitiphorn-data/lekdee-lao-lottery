@@ -3,13 +3,17 @@
 """
 ตรวจว่าข้อมูลยัง "สด" อยู่ไหม — กันกรณีระบบรันผ่านแต่ดึงข้อมูลใหม่ไม่ได้ (พังเงียบ)
 
-สำคัญ: หน้าต้นทางฮานอยเก็บย้อนหลังแค่ ~4 วัน ถ้าปล่อยให้ค้างนานกว่านั้น
-ข้อมูลช่วงที่ขาดจะหายถาวร กู้ไม่ได้ — จึงต้องเตือนตั้งแต่เนิ่นๆ
+สำคัญ: หน้า Sanook ฮานอยเก็บย้อนหลังแค่ ~5 วัน ถ้าปล่อยให้ค้างนานกว่านั้น ต้องกู้ด้วย
+fetch_hanoi.py --full (ดึงจากสยามรัฐ/บ้านกีฬาที่มีคลังย้อนหลัง) — จึงควรเตือนตั้งแต่เนิ่นๆ
 
 exit 0 = ปกติ, exit 1 = ข้อมูลค้าง (ให้ workflow แจ้งเตือน)
 ใช้: python tools/check_fresh.py
 """
 import json, os, sys, datetime
+
+for _s in (sys.stdout, sys.stderr):   # console Windows (cp1252) พิมพ์ภาษาไทยไม่ได้
+    try: _s.reconfigure(encoding='utf-8')
+    except Exception: pass
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TODAY = datetime.datetime.now(datetime.timezone.utc).date()

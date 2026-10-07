@@ -2,7 +2,9 @@ name: อัปเดตผลหวยลาว
 
 on:
   schedule:
-    - cron: '0 15 * * *'   # 22:00 เวลาไทย (UTC+7) ทุกวัน — หลังหวยออก
+    # 22:00 เวลาไทย (UTC+7) ทุกวัน — หลังหวยออก
+    # หมายเหตุ: GitHub มักเริ่มรอบตั้งเวลาช้ากว่ากำหนด 2-7 ชม. (จริงๆ รันราวตี 1-5) ไม่กระทบข้อมูล
+    - cron: '0 15 * * *'
   workflow_dispatch:        # กดรันเองได้จากแท็บ Actions
 
 permissions:
@@ -12,6 +14,9 @@ permissions:
 concurrency:
   group: update-lao
   cancel-in-progress: false
+
+env:
+  ALERT_FILE: alerts.md     # สคริปต์จดปัญหาที่คนต้องตรวจลงไฟล์นี้ (ไม่ถูก commit)
 
 jobs:
   update:
@@ -32,6 +37,10 @@ jobs:
       - name: ดึงผลหวยฮานอยล่าสุด
         run: python tools/fetch_hanoi.py
 
+      # ด่านสุดท้าย: งวดหาย / เลขผิดรูปแบบ → หยุด ไม่ commit
+      - name: ตรวจข้อมูลก่อนบันทึก
+        run: python tools/check_data.py
+
       - name: commit + push ถ้ามีงวดใหม่
         run: |
           if git diff --quiet -- lao_history.json hanoi_history.json; then
@@ -50,6 +59,14 @@ jobs:
         id: fresh
         run: python tools/check_fresh.py
 
+      # แหล่งข้อมูลให้เลขไม่ตรงกัน (ระบบไม่เดา ไม่ทับ) → ให้คนตรวจ
+      - name: ตรวจว่ามีงวดที่แหล่งข้อมูลขัดกันไหม
+        run: |
+          if [ -s "$ALERT_FILE" ]; then
+            cat "$ALERT_FILE"
+            exit 1
+          fi
+
       # ถ้าขั้นตอนไหนล้ม → เปิด issue แจ้งเตือน (GitHub จะส่งอีเมลให้เจ้าของ repo)
       - name: แจ้งเตือนเมื่อพัง
         if: failure()
@@ -58,18 +75,22 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           STALE: ${{ steps.fresh.outputs.stale }}
         run: |
+          DETAIL=""
+          [ -s "$ALERT_FILE" ] && DETAIL="$(cat "$ALERT_FILE")"
           TITLE="ระบบอัปเดตผลหวยมีปัญหา"
-          BODY="ระบบอัปเดตอัตโนมัติทำงานไม่สำเร็จ ($(date -u +%Y-%m-%d))
+          BODY="ระบบอัปเดตอัตโนมัติต้องให้คนตรวจ ($(date -u +%Y-%m-%d))
 
-          ${STALE:-ดึงข้อมูลหรือ push ไม่สำเร็จ}
+          ${STALE:-}
+          ${DETAIL:-ดึงข้อมูลหรือ push ไม่สำเร็จ}
 
           ดู log: ${RUN_URL}
 
-          **ทำไมต้องรีบดู:** หน้าต้นทางฮานอยเก็บย้อนหลังแค่ ~4 วัน
-          ถ้าปล่อยค้างนานกว่านั้น ข้อมูลช่วงที่ขาดจะหายถาวร กู้ไม่ได้
+          **ถ้าเป็นเรื่องแหล่งข้อมูลไม่ตรงกัน:** ระบบไม่บันทึก/ไม่ทับงวดนั้นไว้ก่อน
+          เปิดดูผลจากเว็บอื่นแล้วแก้ไฟล์เอง หรือรอรอบหน้า (เว็บข่าวมักแก้คำผิดเองภายใน 1-2 วัน)
 
-          วิธีแก้เบื้องต้น: กด Re-run ที่หน้า Actions — ถ้ายังพัง แปลว่าเว็บต้นทาง
-          เปลี่ยนรูปแบบ ต้องแก้ตัวแปลงผลใน tools/fetch_history.py หรือ tools/fetch_hanoi.py"
+          **ถ้าข้อมูลค้าง:** หน้า Sanook ฮานอยเก็บย้อนหลังแค่ ~5 วัน
+          กด Re-run ที่หน้า Actions — ถ้ายังพัง แปลว่าเว็บต้นทางเปลี่ยนรูปแบบ
+          ต้องแก้ตัวอ่านใน tools/sources.py แล้วรัน fetch_*.py --full เพื่อเติมงวดที่ขาด"
 
           # ถ้ามี issue เดิมที่ยังเปิดอยู่ ให้คอมเมนต์ต่อ (กันสแปมวันละใบ)
           EXISTING=$(gh issue list --label "auto-update-failed" --state open --limit 1 --json number -q '.[0].number')

@@ -54,8 +54,9 @@ function el(tag, opts, children){
 }
 
 /* ============================================================
-   เลขดี — วิเคราะห์ "หวยลาว" จากสถิติย้อนหลัง (หน้าเดียว)
-   ข้อมูลจริงดึงจาก Sanook ผ่าน CORS proxy ฟรี เก็บใน localStorage
+   เลขดี — วิเคราะห์ "หวยลาว/ฮานอย" จากสถิติย้อนหลัง (หน้าเดียว)
+   ข้อมูลหลัก = lao_history / hanoi_history (GitHub Actions ดึง + ตรวจเทียบหลายแหล่งทุกคืน)
+   ปุ่ม "อัปเดตผลจริง" ดึงจาก Sanook ผ่าน CORS proxy ฟรี เติมงวดที่ยังไม่มี เก็บใน localStorage
    ============================================================ */
 const App = {
   state: {
@@ -68,13 +69,13 @@ const App = {
   },
   theme:'pastel',
 
-  /* หวยที่รองรับ (ลาว + ฮานอย 4 ประเภท) */
+  /* หวยที่รองรับ (ลาว + ฮานอย 4 ประเภท) • src = แหล่งข้อมูลในตัว (ดู tools/sources.py) */
   LOTTERIES: [
-    { id:'lao',          name:'หวยลาว',        hue:188 }, // เทอร์ควอยซ์
-    { id:'hanoi',        name:'ฮานอย',         hue:296 }, // ม่วง-แมเจนทา
-    { id:'hanoiSpecial', name:'ฮานอยพิเศษ',    hue:242 }, // อินดิโก
-    { id:'hanoiVip',     name:'ฮานอย VIP',     hue:338 }, // โรสพิงก์
-    { id:'hanoiTask',    name:'ฮานอยเฉพาะกิจ', hue:215 }, // ฟ้า-azure
+    { id:'lao',          name:'หวยลาว',        hue:188, src:'Sanook + สยามรัฐ + ข่าวสด' },     // เทอร์ควอยซ์
+    { id:'hanoi',        name:'ฮานอย',         hue:296, src:'ผลทางการ XSMB' },                 // ม่วง-แมเจนทา
+    { id:'hanoiSpecial', name:'ฮานอยพิเศษ',    hue:242, src:'Sanook + สยามรัฐ + บ้านกีฬา' },   // อินดิโก
+    { id:'hanoiVip',     name:'ฮานอย VIP',     hue:338, src:'Sanook + สยามรัฐ + บ้านกีฬา' },   // โรสพิงก์
+    { id:'hanoiTask',    name:'ฮานอยเฉพาะกิจ', hue:215, src:'Sanook + สยามรัฐ + บ้านกีฬา' },   // ฟ้า-azure
   ],
   HANOI_KEYS: ['hanoi','hanoiSpecial','hanoiVip','hanoiTask'],
   lot(){ return this.LOTTERIES.find(x=>x.id===this.state.lottery) || this.LOTTERIES[0]; },
@@ -126,8 +127,9 @@ const App = {
     const seed=this._seed[id]||[], real=this._real[id]||[];
     if(!seed.length && !real.length) return id==='lao'? this._mock : [];
     const byDay={};
+    for(const d of real) byDay[this.ymd(d.ts)]=d;
+    // ข้อมูลในตัว (ตรวจเทียบหลายแหล่งแล้ว) ชนะผลที่กดดึงเองในเบราว์เซอร์ — ปุ่มอัปเดตใช้เติมเฉพาะงวดที่ยังไม่มี
     for(const d of seed) byDay[this.ymd(d.ts)]=d;
-    for(const d of real) byDay[this.ymd(d.ts)]=d; // ผลที่กดอัปเดตใหม่ทับของในตัว
     return Object.values(byDay).sort((a,b)=>a.ts-b.ts);
   },
 
@@ -199,21 +201,40 @@ const App = {
     }
     return out;
   },
+  /* แบ่งหน้าตามหัวข้อ <h2>/<h3> ที่มีวันที่ — ผลใต้หัวข้อไหนเป็นของวันนั้น
+     (ของเดิมเดาวันจากหัวข้อที่อยู่ใกล้สุด ทำให้ผลวันล่าสุดไปลงผิดวันได้)
+     หัวข้อวันล่าสุดเขียน "6 ตุลาคม 2569" ส่วนวันก่อนหน้าเขียน "5/10/2569" — รองรับทั้งสองแบบ */
   parseHanoi(raw){
-    const text=raw.replace(/<[^>]+>/g,' ').replace(/&[a-z#0-9]+;/gi,' ').replace(/\s+/g,' ');
-    const TYPES={'ปกติ':'hanoi','พิเศษ':'hanoiSpecial','vip':'hanoiVip','เฉพาะกิจ':'hanoiTask'};
-    const dmarks=[]; let dm; const dre=/หวยฮานอย\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})/g;
-    while((dm=dre.exec(text))) dmarks.push([dm.index,+dm[1],+dm[2],+dm[3]]);
+    const strip=s=>s.replace(/<[^>]+>/g,' ').replace(/&[a-z#0-9]+;/gi,' ').replace(/\s+/g,' ');
+    const TM_FULL=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+    const findDate=(t)=>{
+      let d,mo,y,m=t.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+      if(m){ d=+m[1]; mo=+m[2]; y=+m[3]; }
+      else {
+        m=t.match(/(\d{1,2})\s*([฀-๿.]+?)\s*(\d{4})/); if(!m) return null;
+        const nm=m[2].replace(/\.$/,'');
+        mo=1+this.TM.findIndex(x=>x.replace(/\.$/,'')===nm); if(!mo) mo=1+TM_FULL.indexOf(nm); if(!mo) return null;
+        d=+m[1]; y=+m[3];
+      }
+      if(y<100) y+=2500; if(y>2400) y-=543;
+      return Date.UTC(y,mo-1,d);
+    };
+    const typeKey=(n)=>{ n=n.trim().toLowerCase();
+      return n.includes('เฉพาะกิจ')?'hanoiTask':n.includes('พิเศษ')?'hanoiSpecial':(n.includes('vip')||n.includes('วีไอพี'))?'hanoiVip':n.includes('ปกติ')?'hanoi':null; };
+    const heads=[]; const hre=/<h[1-4][^>]*>([\s\S]*?)<\/h[1-4]>/gi; let h;
+    while((h=hre.exec(raw))) heads.push({s:h.index, e:hre.lastIndex, t:strip(h[1])});
+    const bre=/ผลหวยฮานอย\s*([฀-๿a-zA-Z ]{0,14}?)\s*(?:เลข\s*4\s*ตัว\s*:?\s*\d{4}\s*)?เลข\s*3\s*ตัวบน\s*:?\s*(\d{3})\s*เลข\s*2\s*ตัวบน\s*:?\s*(\d{2})\s*เลข\s*2\s*ตัวล่าง\s*:?\s*(\d{2})/g;
     const out={hanoi:[],hanoiSpecial:[],hanoiVip:[],hanoiTask:[]}; const seen={};
-    const bre=/ผลหวยฮานอย([฀-๿a-zA-Z ]{0,14}?)\s*(?:เลข\s*4\s*ตัว\s*:\s*\d+\s*)?เลข\s*3\s*ตัวบน\s*:\s*\d{3}\s*เลข\s*2\s*ตัวบน\s*:\s*(\d{2})\s*เลข\s*2\s*ตัวล่าง\s*:\s*(\d{2})/g;
-    let m;
-    while((m=bre.exec(text))){
-      let nm=m[1].trim(); const key=TYPES[nm.toLowerCase()==='vip'?'vip':nm]; if(!key) continue;
-      let dd=null; for(const x of dmarks){ if(x[0]<=m.index) dd=x; else break; } if(!dd) dd=dmarks[0]; if(!dd) continue;
-      let y=dd[3]<100?dd[3]+2500:dd[3]; const ce=y-543; const ts=Date.UTC(ce,dd[2]-1,dd[1]);
-      const k=key+'|'+this.ymd(ts); if(seen[k]) continue; seen[k]=1;
-      out[key].push({ ts, top:+m[2], bottom:+m[3] });
-    }
+    heads.forEach((hd,i)=>{
+      if(!hd.t.includes('ฮานอย')) return;
+      const ts=findDate(hd.t); if(ts==null||isNaN(ts)) return;   // หัวข้อไม่มีวันที่ → ไม่เดา
+      const seg=strip(raw.slice(hd.e, i+1<heads.length?heads[i+1].s:raw.length)); let m;
+      while((m=bre.exec(seg))){
+        const key=typeKey(m[1]); if(!key || m[2].slice(-2)!==m[3]) continue;   // 3 ตัวบนต้องลงท้ายด้วย 2 ตัวบน
+        const k=key+'|'+this.ymd(ts); if(seen[k]) continue; seen[k]=1;
+        out[key].push({ ts, top:+m[3], bottom:+m[4] });
+      }
+    });
     return out;
   },
   async fetchProxied(url){
@@ -594,7 +615,7 @@ function render(){
 
   const detail = el('div',{style:{animation:'pop .35s ease both'}});
 
-  detail.appendChild(pageHeader('วิเคราะห์ช่วงเลข','ช่วงข้อมูล '+A.thai(fa)+' – '+A.thai(Date.parse(A.state.dateTo))+' • '+total.toLocaleString()+' งวด'+(real?' • Sanook':'')));
+  detail.appendChild(pageHeader('วิเคราะห์ช่วงเลข','ช่วงข้อมูล '+A.thai(fa)+' – '+A.thai(Date.parse(A.state.dateTo))+' • '+total.toLocaleString()+' งวด'+(real?' • '+l.src:'')));
 
   detail.appendChild(filterBar(true));
 

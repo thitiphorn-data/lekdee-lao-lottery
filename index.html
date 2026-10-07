@@ -180,7 +180,7 @@ const App = {
 
   /* ---- backtest: ทำนายแต่ละงวดจากข้อมูลก่อนหน้า แล้วเทียบผลจริง ---- */
   backtest(size, fromTs, toTs, id){
-    const all=this.draws(id); const rows=[], runT=[], runB=[]; let hitT=0,hitB=0,nT=0,nB=0;
+    const all=this.draws(id); const rows=[]; let hitT=0,hitB=0,nT=0,nB=0;
     const ct=new Array(100).fill(0), cb=new Array(100).fill(0);
     for(let i=0;i<all.length;i++){
       const d=all[i];
@@ -189,11 +189,10 @@ const App = {
         const okT=d.top>=aT.s && d.top<aT.s+size, okB=d.bottom>=aB.s && d.bottom<aB.s+size;
         rows.push({ ts:d.ts, pTop:[aT.s,aT.s+size-1], aTop:d.top, okT, pBot:[aB.s,aB.s+size-1], aBot:d.bottom, okB });
         nT++; if(okT)hitT++; nB++; if(okB)hitB++;
-        runT.push(hitT/nT); runB.push(hitB/nB);
       }
       ct[d.top]++; cb[d.bottom]++;
     }
-    return { rows, runT, runB, accT:nT?hitT/nT:0, accB:nB?hitB/nB:0, hitT, hitB, nT, nB };
+    return { rows, accT:nT?hitT/nT:0, accB:nB?hitB/nB:0, hitT, hitB, nT, nB };
   },
 
   /* ---- ปุ่ม "อัปเดตผลจริง" (ไม่ใช้ CORS proxy แล้ว — proxy ฟรีที่เคยใช้ตายหมด) ----
@@ -597,33 +596,29 @@ function render(){
       sumCard('2 ตัวบน',bres.accT,bres.hitT,bres.nT,cT), sumCard('2 ตัวล่าง',bres.accB,bres.hitB,bres.nB,c2),
     ]));
 
-    /* กราฟอัตราทายถูกสะสม เทียบเส้นเดาสุ่ม — ยิ่งทดสอบหลายงวด เส้นยิ่งเข้าใกล้เส้นประ */
-    if(bres.runT.length>=10){
-      const svgNS='http://www.w3.org/2000/svg', hi=Math.min(1,size/100*2), skip=5;
-      const X=(i,n)=>(n>1?i/(n-1)*100:0), Y=p=>+(40-Math.min(p,hi)/hi*36).toFixed(2);
-      const svg=document.createElementNS(svgNS,'svg');
-      svg.setAttribute('viewBox','0 0 100 44'); svg.setAttribute('preserveAspectRatio','none');
-      svg.style.width='100%'; svg.style.height='150px'; svg.style.display='block';
-      const line=(pts,color,dash)=>{ const e=document.createElementNS(svgNS,'polyline');
-        e.setAttribute('points',pts); e.setAttribute('fill','none'); e.setAttribute('stroke',color); e.setAttribute('stroke-width',dash?'1.2':'1.8');
-        if(dash) e.setAttribute('stroke-dasharray','5 4'); e.style.vectorEffect='non-scaling-stroke'; svg.appendChild(e); };
-      const series=(run)=>run.slice(skip).map((p,i,a)=>X(i,a.length).toFixed(2)+','+Y(p)).join(' ');
-      line('0,'+Y(size/100)+' 100,'+Y(size/100),'#a39db4',true);
-      line(series(bres.runT),cT.deep); line(series(bres.runB),c2.accent);   // ล่างใช้สีอ่อนกว่า ให้แยกเส้นออก
-      const yLab=(txt,p,right)=>el('div',{style:{position:'absolute',[right?'right':'left']:'0',top:(Y(p)/44*100)+'%',transform:right?'translateY(-135%)':'translateY(-50%)',fontSize:'10px',color:'#8a8499',background:'rgba(255,255,255,.85)',padding:'0 4px',borderRadius:'4px'}},txt);
-      const chart=el('div',{style:{position:'relative'}}); chart.appendChild(svg);
-      chart.appendChild(yLab(Math.round(hi*100)+'%',hi)); chart.appendChild(yLab('0%',0)); chart.appendChild(yLab('เดาสุ่ม '+size+'%',size/100,true));
-      const key=(color,txt,dash)=>el('span',{style:{display:'inline-flex',alignItems:'center',gap:'6px'}},[
-        el('span',{style:{display:'inline-block',width:'18px',borderTop:(dash?'2px dashed ':'3px solid ')+color}}),txt]);
-      const r0=bres.rows[skip], r1=bres.rows[bres.rows.length-1];
-      bt.appendChild(el('div',{style:{background:'#fff',borderRadius:'24px',padding:'20px',boxShadow:'0 12px 32px rgba(60,40,100,.06)',border:'1px solid rgba(40,30,60,.05)',marginBottom:'18px'}},[
-        el('h3',{style:{fontWeight:'600',fontSize:'18px',margin:'0'}},'อัตราทายถูกสะสม เทียบการเดาสุ่ม'),
-        el('div',{style:{fontSize:'12px',color:'#9b94ad',margin:'2px 0 14px'}},'ยิ่งทดสอบหลายงวด เส้นยิ่งวิ่งเข้าหาเส้นประ = สถิติไม่ได้ช่วยให้ถูกมากกว่าการเลือก '+size+' ตัวแบบสุ่ม'),
-        chart,
-        el('div',{style:{display:'flex',justifyContent:'space-between',fontSize:'10px',color:'#b3adc0',marginTop:'4px'}},[ el('span',{},A.short(r0.ts)), el('span',{},A.short(r1.ts)) ]),
-        el('div',{style:{display:'flex',gap:'16px',flexWrap:'wrap',fontSize:'12px',color:'#7c7690',marginTop:'10px'}},[
-          key(cT.deep,'2 ตัวบน'), key(c2.accent,'2 ตัวล่าง'), key('#a39db4','เดาสุ่ม '+size+'%',true),
+    /* แท่งเทียบ: ใช้สถิติเลือก vs เลือกมั่วๆ — สเกลเต็ม 0–100% (ไม่ตัดแกน) ให้เห็นว่าต่างกันแค่ไหนจริงๆ */
+    if(bres.nT){
+      const bar=(lab,pct,color,bold)=>el('div',{style:{display:'grid',gridTemplateColumns:'104px 1fr 44px',alignItems:'center',gap:'10px'}},[
+        el('span',{style:{fontSize:'13px',color:bold?'#2c2740':'#8a8499',fontWeight:bold?'600':'400'}},lab),
+        el('div',{style:{height:'22px',background:'#f3f1f7',borderRadius:'7px',overflow:'hidden'}},[
+          el('div',{style:{height:'100%',width:(pct*100)+'%',background:color,borderRadius:'7px'}}),
         ]),
+        el('span',{style:{fontSize:'15px',fontWeight:'600',color:bold?'#2c2740':'#8a8499',textAlign:'right'}},Math.round(pct*100)+'%'),
+      ]);
+      const group=(label,acc,cc)=>el('div',{style:{display:'flex',flexDirection:'column',gap:'8px'}},[
+        el('span',{style:{fontWeight:'600',fontSize:'13px',padding:'4px 12px',borderRadius:'999px',background:cc.soft,color:cc.deep,alignSelf:'flex-start'}},label),
+        bar('ใช้สถิติเลือก',acc,cc.deep,true),
+        bar('เลือกมั่วๆ',size/100,'#c9c3d6',false),
+      ]);
+      const vt=A.verdict(bres.hitT,bres.nT,size), vb=A.verdict(bres.hitB,bres.nB,size);
+      const msg = bres.nT<30 ? '→ งวดน้อยเกินไปที่จะสรุป — ลองเลือกช่วงวันที่ให้ยาวขึ้น'
+        : (vt.tone===0 && vb.tone===0) ? '→ แท่งยาวพอๆ กัน = ใช้สถิติไม่ได้ช่วยให้ถูกมากขึ้น'
+        : '→ 2 ตัวบน: '+vt.txt+' • 2 ตัวล่าง: '+vb.txt;
+      bt.appendChild(el('div',{style:{background:'#fff',borderRadius:'24px',padding:'20px',boxShadow:'0 12px 32px rgba(60,40,100,.06)',border:'1px solid rgba(40,30,60,.05)',marginBottom:'18px'}},[
+        el('h3',{style:{fontWeight:'600',fontSize:'18px',margin:'0'}},'ใช้สถิติ vs เลือกมั่วๆ ถูกต่างกันแค่ไหน'),
+        el('div',{style:{fontSize:'12px',color:'#9b94ad',margin:'2px 0 16px'}},'ทำนาย '+bres.nT.toLocaleString()+' งวดที่ผ่านมา ด้วยชุด '+size+' ตัว'),
+        el('div',{style:{display:'flex',flexDirection:'column',gap:'18px'}},[ group('2 ตัวบน',bres.accT,cT), group('2 ตัวล่าง',bres.accB,c2) ]),
+        el('div',{style:{marginTop:'16px',padding:'10px 14px',borderRadius:'12px',background:'#f6f4fa',fontSize:'14px',fontWeight:'600',color:'#2c2740',lineHeight:'1.5'}},msg),
       ]));
     }
 
@@ -727,10 +722,10 @@ function render(){
   });
   detail.appendChild(sizeCardGrid);
 
-  /* heatmap + curve */
+  /* heatmap + เลขที่ออกบ่อย/น้อยในอดีต */
   {
     const sideC=side==='top'?cT:c2; const cnts=side==='top'?ct:cb; const sp=side==='top'?pt:pb;
-    const cv=A.cov(sp,total,size);
+    const cv=A.cov(sp,total,size);   // ใช้วาดกรอบ "ช่วงที่เคยออกมากสุด" ในตาราง
     const maxF=Math.max(...cnts,1);
     const heatHue=side==='top'?l.hue:l.hue+16;
 
@@ -739,32 +734,6 @@ function render(){
       const it=f/maxF; const inWin=nn>=cv.best.s&&nn<cv.best.s+size;
       heatGrid.appendChild(el('div',{style:{aspectRatio:'1',display:'grid',placeItems:'center',fontSize:'11px',fontWeight:inWin?'700':'500',borderRadius:'8px',background:`oklch(${0.97-0.45*it} ${0.012+0.135*it} ${heatHue})`,color:it>0.52?'#fff':'#544c68',boxShadow:inWin?'0 0 0 2px '+sideC.deep+' inset':'none'}},A.pad(nn)));
     });
-
-    const n=cv.pts.length, maxP=Math.max(...cv.pts)||1;
-    const X=i=>(n>1?i/(n-1)*100:0), Y=p=>+(42-(p/maxP)*36).toFixed(2);
-    const points=cv.pts.map((p,i)=>X(i).toFixed(2)+','+Y(p)).join(' ');
-    const area='M0,44 '+cv.pts.map((p,i)=>'L'+X(i).toFixed(2)+','+Y(p)).join(' ')+' L100,44 Z';
-    const mLeft=X(cv.best.s), mTop=Y(cv.best.p)/44*100;
-
-    const svgNS='http://www.w3.org/2000/svg';
-    const svg=document.createElementNS(svgNS,'svg');
-    svg.setAttribute('viewBox','0 0 100 44'); svg.setAttribute('preserveAspectRatio','none');
-    svg.style.width='100%'; svg.style.height='120px'; svg.style.display='block';
-    const pathEl=document.createElementNS(svgNS,'path');
-    pathEl.setAttribute('d',area); pathEl.setAttribute('fill',sideC.soft);
-    const poly=document.createElementNS(svgNS,'polyline');
-    poly.setAttribute('points',points); poly.setAttribute('fill','none');
-    poly.setAttribute('stroke',sideC.deep); poly.setAttribute('stroke-width','1.6');
-    poly.style.vectorEffect='non-scaling-stroke';
-    svg.appendChild(pathEl); svg.appendChild(poly);
-    const y0=Y(size/100), base=document.createElementNS(svgNS,'line');   // เส้นเดาสุ่ม
-    base.setAttribute('x1','0'); base.setAttribute('x2','100'); base.setAttribute('y1',y0); base.setAttribute('y2',y0);
-    base.setAttribute('stroke','#a39db4'); base.setAttribute('stroke-width','1.2'); base.setAttribute('stroke-dasharray','5 4');
-    base.style.vectorEffect='non-scaling-stroke'; svg.appendChild(base);
-
-    const marker=el('div',{style:{position:'absolute',left:mLeft+'%',top:mTop+'%',transform:'translate(-50%,-130%)',background:sideC.deep,color:'#fff',fontSize:'11px',fontWeight:'600',padding:'2px 8px',borderRadius:'999px',whiteSpace:'nowrap'}},A.pl(cv.best.p));
-    const curveWrap=el('div',{style:{position:'relative'}}); curveWrap.appendChild(svg); curveWrap.appendChild(marker);
-    curveWrap.appendChild(el('div',{style:{position:'absolute',right:'0',top:(y0/44*100)+'%',transform:'translateY(-50%)',fontSize:'10px',color:'#8a8499',background:'rgba(255,255,255,.85)',padding:'0 4px',borderRadius:'4px'}},'เดาสุ่ม '+size+'%'));
 
     const idx=[...cnts.keys()].sort((a,b)=>cnts[b]-cnts[a]);
     const hot=idx.slice(0,6).map(nn=>el('span',{style:{fontWeight:'600',fontSize:'13px',padding:'4px 10px',borderRadius:'9px',background:sideC.deep,color:'#fff'}},A.pad(nn)));
@@ -784,15 +753,6 @@ function render(){
       el('div',{class:'an-grid',style:{display:'grid',gridTemplateColumns:'1.08fr .92fr',gap:'24px',alignItems:'start'}},[
         heatGrid,
         el('div',{style:{display:'flex',flexDirection:'column',gap:'18px'}},[
-          el('div',{},[
-            el('div',{style:{fontSize:'13px',fontWeight:'600',marginBottom:'10px'}},'สัดส่วนที่เคยออกในแต่ละช่วง ('+size+' ตัว) — ข้อมูลอดีต'),
-            curveWrap,
-            el('div',{style:{display:'flex',justifyContent:'space-between',fontSize:'10px',color:'#b3adc0',marginTop:'3px'}},[
-              el('span',{},'เริ่ม 00'),
-              el('span',{style:{color:'#8a8499',fontWeight:'600'}},'สูงสุด '+A.lab(cv.best.s,size)),
-              el('span',{},'เริ่ม 99'),
-            ]),
-          ]),
           el('div',{style:{display:'flex',gap:'14px'}},[
             el('div',{style:{flex:'1'}},[
               el('div',{style:{fontSize:'12px',color:'#9b94ad',marginBottom:'8px'}},'ออกบ่อยในอดีต'),
